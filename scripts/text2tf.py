@@ -24,7 +24,7 @@ from HiggsAnalysis.CombinedLimit.DatacardParser import *
 from HiggsAnalysis.CombinedLimit.ModelTools import *
 from HiggsAnalysis.CombinedLimit.ShapeTools import *
 from HiggsAnalysis.CombinedLimit.PhysicsModel import *
-from HiggsAnalysis.CombinedLimit.tfscipyhess import ScipyTROptimizerInterface,jacobian
+from HiggsAnalysis.CombinedLimit.tfscipyhess import ScipyTROptimizerInterface,jacobian,hessian
 
 parser = OptionParser(usage="usage: %prog [options] datacard.txt -o output \nrun with --help to get list of options")
 addDatacardParserOptions(parser)
@@ -280,6 +280,14 @@ if boundmode == 0:
 elif boundmode == 1:
   poi = tf.square(xpoi)
   jacpoitheta = tf.diag(tf.concat([2.*xpoi,tf.ones([nsyst],dtype=dtype)],axis=0))
+  #jacpoitheta = jacobian(tf.concat([poi,theta],axis=0),x)
+
+testjac = jacobian(tf.concat([poi,theta],axis=0),x)
+
+sess = tf.Session()
+sess.run(tf.global_variables_initializer())
+#print(sess.run(x))
+print(sess.run(testjac))
 
 xpoi = tf.identity(poi, name="xpoi")
 poi = tf.identity(poi, name=options.POIMode)
@@ -354,19 +362,23 @@ else:
 pmaskedexpnorm = tf.identity(pmaskedexpnorm,"pmaskedexpnorm")
 
 grad = tf.gradients(l,x)[0]
-hess = tf.hessians(l,x)[0]
+#hess = tf.hessians(l,x)[0]
+hess = hessian(l,x)
 hesseigvals = tf.self_adjoint_eigvals(hess)
 mineigval = tf.reduce_min(hesseigvals)
 isposdef = tf.greater(mineigval,0.)
+#isposdef = tf.constant(True)
 gradcol = tf.reshape(grad,[-1,1])
 
 invalidinvhess = -99.*tf.eye(nparms,dtype=dtype)
 invhess = tf.cond(isposdef,lambda: tf.matrix_inverse(hess), lambda: invalidinvhess)
+#invhess = invalidinvhess
 edm = 0.5*tf.matmul(tf.matmul(gradcol,invhess,transpose_a=True),gradcol)
 
 isposdef = tf.identity(isposdef,name="isposdef")
 edm = tf.identity(edm,name="edm")
 invhess = tf.identity(invhess,name="invhess")
+hesseigvals = tf.identity(hesseigvals,name="hesseigvals")
 
 
 if boundmode>0:
@@ -386,6 +398,7 @@ invhessoutputs.append(invhesspoitheta)
 for output in outputs[1:]:
   outtheta = tf.concat([output,theta],axis=0)
   jac = jacobian(outtheta,x)
+  #jac = tf.eye(nparms,dtype=dtype)
   invhessout = tf.matmul(jac,tf.matmul(invhess,jac,transpose_b=True))
   invhessoutputs.append(invhessout)
   

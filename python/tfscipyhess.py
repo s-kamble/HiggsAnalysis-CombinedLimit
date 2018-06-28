@@ -8,6 +8,7 @@ import tensorflow as tf
 from tensorflow.python.framework import dtypes
 from tensorflow.python.ops import tensor_array_ops
 from tensorflow.python.ops import control_flow_ops
+from tensorflow.python.ops import functional_ops
 
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
@@ -63,24 +64,118 @@ def jacobian(ys,
 
   # Declare an iterator and tensor array loop variables for the gradients.
   n = array_ops.size(x)
+  #jacvar = tf.Variable(tf.zeros([n,n],x.dtype),trainable=False)
+  #grads = []
+  #for igrad in range(x.shape[0]):
+    #grads.append(tf.zeros([n],dtype=x.dtype))
+
   loop_vars = [
       array_ops.constant(0, dtypes.int32),
+      #tf.tuple(grads)
+      #tf.zeros([n],dtype=x.dtype)
+      #jacvar
+      #array_ops.constant(0, dtypes.int32),
+      #jac
       tensor_array_ops.TensorArray(x.dtype, n)
   ]
+      
+  #def body(j,grads):
+    ##print(arg)
+    ##j = arg[0]
+    ##outgrads = list(arg[1:])
+    #g = tf.gradients(gradient[j],x)[0]
+    #grads[j] = g
+    #return (j,grads)
+    
+  #def body(j,jac):
+    #g = tf.gradients(gradient[j],x)[0]
+    ##g = tf.reshape(g,[1,-1])
+    ##newshape = jac.shape[0] + 1
+    ##jac = tf.concat([jac,g],axis=0)
+    ##jac.set_shape([newshape,g.shape[1]])
+    #update = tf.scatter_update(jacvar,j,g,use_locking=False)
+    ##return (j+1,jac)
+    ##return j+1
+    ##g = gradient
+    ##update = tf.scatter_update(jac,j,g,use_locking=True)
+    #with tf.control_dependencies([update]):
+      #return (j+1,jac)
+      ##return j+1
+  
   # Iterate over all elements of the gradient and compute second order
   # derivatives.
-  _, hessian = control_flow_ops.while_loop(
-      lambda j, _: j < n,
-      lambda j, result: (j + 1,
-                          result.write(j, tf.gradients(gradient[j], x)[0])),
-      loop_vars
+  #j,hessian = control_flow_ops.while_loop(
+      #lambda j,_: j < n,
+      ##lambda *arg: arg[0]<n,
+      ##lambda j,result: (j+1,result),
+      ##body,
+      #lambda j, result: (j + 1,
+                          #result.write(j, tf.gradients(gradient[j], x)[0])),
+      #loop_vars,
+      ##shape_invariants = [tf.TensorShape([]), tf.TensorShape([None, x.shape[0]])],
+      #parallel_iterations = 1,
+      #back_prop = False,
+      #swap_memory = False,
+  #)
+  j,hessian = functional_ops.While(
+    lambda j,_: j < n,
+    lambda j, result: (j + 1,
+                        result.write(j, tf.gradients(gradient[j], x)[0])),
+    loop_vars
   )
+  
+  #outgrads = output[1:]
+  #outjac = tf.stack(output,axis=0)
+  #return outjac
 
   _shape = array_ops.shape(x)
   _reshaped_hessian = array_ops.reshape(hessian.stack(),
                                         array_ops.concat((_shape, _shape), 0))
   #hessians.append(_reshaped_hessian)
   return _reshaped_hessian
+  #return jacout
+
+def hessian(ys,
+             xs,
+             name="hessian",
+             colocate_gradients_with_ops=False,
+             gate_gradients=False,
+             aggregation_method=None):
+  """Constructs the jacobian of sum of `ys` with respect to `x` in `xs`.
+  `jacobians()` adds ops to the graph to output the Hessian matrix of `ys`
+  with respect to `xs`.  It returns a list of `Tensor` of length `len(xs)`
+  where each tensor is the jacobian of `sum(ys)`.
+  The Hessian is a matrix of second-order partial derivatives of a scalar
+  tensor (see https://en.wikipedia.org/wiki/Hessian_matrix for more details).
+  Args:
+    ys: A `Tensor` or list of tensors to be differentiated.
+    xs: A `Tensor` or list of tensors to be used for differentiation.
+    name: Optional name to use for grouping all the gradient ops together.
+      defaults to 'hessians'.
+    colocate_gradients_with_ops: See `gradients()` documentation for details.
+    gate_gradients: See `gradients()` documentation for details.
+    aggregation_method: See `gradients()` documentation for details.
+  Returns:
+    A list of jacobian matrices of `sum(ys)` for each `x` in `xs`.
+  Raises:
+    LookupError: if one of the operations between `xs` and `ys` does not
+      have a registered gradient function.
+  """
+  kwargs = {
+      "colocate_gradients_with_ops": colocate_gradients_with_ops,
+      "gate_gradients": gate_gradients,
+      "aggregation_method": aggregation_method
+  }
+  # Compute first-order derivatives and iterate for each x in xs.
+  #hessians = []
+  _gradients = tf.gradients(ys, xs, **kwargs)
+  gradient = _gradients[0]
+  x = xs
+  #for gradient, x in zip(_gradients, xs):  
+  # change shape to one-dimension without graph branching
+  #gradient = array_ops.reshape(gradient, [-1])
+
+  return jacobian(gradient,x)
 
 class ScipyTROptimizerInterface(ExternalOptimizerInterface):
 

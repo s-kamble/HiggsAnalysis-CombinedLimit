@@ -66,6 +66,7 @@ nobs = filter(lambda x: x.name == 'nobs:0', variables)[0]
 
 
 invhess = graph.get_tensor_by_name("invhess:0")
+hesseigvals = graph.get_tensor_by_name("hesseigvals:0")
 isposdef = graph.get_tensor_by_name("isposdef:0")
 edm = graph.get_tensor_by_name("edm:0")
 outputs = tf.get_collection("outputs")
@@ -133,8 +134,17 @@ if options.nThreads>0:
 else:
   config = None
 
+builder = tf.profiler.ProfileOptionBuilder
+#opts = builder().with_file_output('test.txt').order_by('bytes').build()
+opts = builder().order_by('bytes').build()
+opts['max_depth'] = 10000
+opts['select'] = ['micros','bytes']
+
+
 sess = tf.Session(config=config)
 sess.run(globalinit)
+
+prof = tf.profiler.Profiler(sess.graph)
 
 #rthetav = np.concatenate((options.expectSignal*np.ones([npoi],dtype=dtype), np.zeros([nsyst],dtype=dtype)), axis=0)
 xv = sess.run(x)
@@ -314,7 +324,19 @@ for itoy in range(ntoys):
     ret = minimizer.minimize(sess)
 
   #get fit output
-  xval, outvalss, thetavals, theta0vals, invhessval, invhessoutvals, nllval, isposdefval, edmval = sess.run([x,outputs,theta,theta0,invhess,invhessoutputs,l,isposdef,edm])
+  run_metadata = tf.RunMetadata()
+  xval, outvalss, thetavals, theta0vals, invhessval, invhessoutvals, nllval, isposdefval, edmval = sess.run([x,outputs,theta,theta0,invhess,invhessoutputs,l,isposdef,edm],options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
+               run_metadata=run_metadata)
+
+  #xval, outvalss, thetavals, theta0vals, invhessval, invhessoutvals, nllval, isposdefval, edmval, eigvals = sess.run([x,outputs,theta,theta0,invhess,invhessoutputs,l,isposdef,edm,hesseigvals],options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
+               #run_metadata=run_metadata)
+
+  
+  prof.add_step(0,run_metadata)
+  prof.profile_operations(options=opts)
+
+  #print(eigvals)
+  
   dnllval = 0.
   if isposdefval and edmval > 0.:
     status = 0

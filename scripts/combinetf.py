@@ -20,7 +20,10 @@ argv.remove( '-b-' )
 
 from array import array
 
-from HiggsAnalysis.CombinedLimit.tfscipyhess import ScipyTROptimizerInterface,JacobianCompute
+from HiggsAnalysis.CombinedLimit.tfscipyhess import ScipyTROptimizerInterface,JacobianCompute,SR1Mod, TrustNCG,TrustSR1
+from tensorflow.python.ops import gradients_impl
+
+
 
 parser = OptionParser(usage="usage: %prog [options] datacard.txt -o output \nrun with --help to get list of options")
 parser.add_option("-t","--toys", default=0, type=int, help="run a given number of toys, 0 fits the data (default), and -1 fits the asimov toy")
@@ -76,8 +79,13 @@ npoi = cpois.shape[0]
 nsyst = csysts.shape[0]
 nparms = npoi + nsyst
 
-grad = tf.gradients(l,x)[0]
+grad = tf.gradients(l,x, gate_gradients=True)[0]
 hesscomp = JacobianCompute(grad,x)
+
+hesspv = tf.placeholder(dtype,shape=[nparms])
+hessp = tf.gradients(grad*tf.stop_gradient(hesspv),x, gate_gradients=True)[0]
+#hessp = gradients_impl._hessian_vector_product(l,[x],[hesspv])[0]
+print(hessp.shape)
 
 jaccomps = []
 for output in outputs:
@@ -96,7 +104,21 @@ ub = np.concatenate((np.inf*np.ones([npoi],dtype=dtype),np.inf*np.ones([nsyst],d
 xtol = np.finfo(dtype).eps
 edmtol = math.sqrt(xtol)
 btol = 1e-8
-minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
+#minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
+
+hessproxy = SR1Mod()
+#minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol}, hess=hessproxy)
+
+#minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 1e-8}, method = 'trust-ncg', hessp=hessp_fun)
+
+#hessproxy = scipy.optimize.SR1()
+#minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 1e-8}, method = 'trust-ncg', hess=hessproxy)
+#optimizer = tf.train.AdagradOptimizer(0.01).minimize(l)
+#optncg = TrustNCG()
+optncg = TrustSR1()
+#optimizerinit = optncg.initialize(l,x,doSR1=False)
+optimizerinit = optncg.initialize(l,x,doSR1=True)
+optimizer = optncg.minimize(l,x)
 
 scanvars = {}
 scannames = []
@@ -131,11 +153,34 @@ bayesassign = tf.assign(x, tf.concat([xpoi,theta+tf.random_normal(shape=theta.sh
 
 #initialize tf session
 if options.nThreads>0:
-  config = tf.ConfigProto(intra_op_parallelism_threads=options.nThreads, inter_op_parallelism_threads=options.nThreads)
+  config = tf.ConfigProto(intra_op_parallelism_threads=options.nThreads, inter_op_parallelism_threads=options.nThreads,
+                          #device_count = {'GPU': 0},
+                          )
 else:
   config = None
 
+#config = tf.ConfigProto(
+        #device_count = {'GPU': 0}
+    #)
+
 sess = tf.Session(config=config)
+
+def hesspfunc(xv,v):
+  print("hesspfunc")
+  return sess.run(hessp, feed_dict = {x: xv, hesspv : v})
+
+def hessfunc(xv):
+  return hesscomp.compute(sess,xv)
+
+def printstep(x):
+  print(x)
+
+#minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol}, method = 'trust-constr', hessp=hesspfunc)
+#minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol}, method = 'trust-constr', hess=hessfunc)
+minimizer = tf.contrib.opt.ScipyOptimizerInterface(l, var_list = [x], options={'disp': True, 'maxiter' : 100000, 'gtol' : 0., 'inexact' : False}, method = 'trust-ncg', hessp=hesspfunc)
+#minimizer = tf.contrib.opt.ScipyOptimizerInterface(l, var_list = [x], options={'disp': True, 'maxiter' : 100000, 'xtol' : xtol}, method = 'Newton-CG', hessp=hesspfunc)
+
+
 sess.run(globalinit)
 
 #rthetav = np.concatenate((options.expectSignal*np.ones([npoi],dtype=dtype), np.zeros([nsyst],dtype=dtype)), axis=0)
@@ -313,8 +358,36 @@ for itoy in range(ntoys):
   sess.run(thetastartassign)
   #set likelihood offset
   sess.run(nexpnomassign)
-  if dofit:
-    ret = minimizer.minimize(sess)
+  #hessproxy.setInitVal(hesscomp.compute(sess))
+  #hessproxy.setInitxg(sess.run([x,grad]))
+  #hessproxy.setHessp(hesspfunc)
+  #hessproxy.setHess(hessfunc)
+  #if dofit:
+    ##ret = minimizer.minimize(sess)
+    #ret = minimizer.minimize(sess,fetches=[l],loss_callback=printstep)
+  sess.run(optimizerinit)
+  #optncg.setHessApprox(hesscomp.compute(sess),sess)
+  #optncg.setHessApprox(np.eye(nparms,dtype=dtype),sess)
+  for ifit in range(100000):
+    #print(ifit)
+
+    lval,_ = sess.run([l,optimizer])
+    isconv = _[0]
+    print([ifit,lval])
+    #isconv = sess.run(optimizer)[0]
+    if (isconv):
+      break
+    #lval = sess.run(l)
+    #print(ifit)
+    #if ifit%1==0:
+      #print([ifit,lval])
+  #ginit = sess.run(grad)
+  #for ifit in range(10*1000):
+    ##lval, gval = sess.run([l,grad])
+    #lval, gval, hesspval = sess.run([l,grad,hessp],feed_dict={hesspv: ginit})
+    #if ifit % 100 == 0:
+      #print(ifit)
+
 
   #get fit output
   xval, outvalss, thetavals, theta0vals, nllval, gradval = sess.run([x,outputs,theta,theta0,l,grad])

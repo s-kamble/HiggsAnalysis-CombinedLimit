@@ -20,7 +20,7 @@ argv.remove( '-b-' )
 
 from array import array
 
-from HiggsAnalysis.CombinedLimit.tfscipyhess import ScipyTROptimizerInterface,JacobianCompute,SR1Mod, TrustNCG,TrustSR1
+from HiggsAnalysis.CombinedLimit.tfscipyhess import ScipyTROptimizerInterface,JacobianCompute,SR1Mod, TrustNCG,TrustSR1Exact, TrustSR1Subspace,TrustSR1SubspaceAlt
 from tensorflow.python.ops import gradients_impl
 
 
@@ -104,9 +104,12 @@ ub = np.concatenate((np.inf*np.ones([npoi],dtype=dtype),np.inf*np.ones([nsyst],d
 xtol = np.finfo(dtype).eps
 edmtol = math.sqrt(xtol)
 btol = 1e-8
+hessproxy = scipy.optimize.SR1(init_scale=1.)
 #minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
+minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol}, hess=hessproxy)
 
-hessproxy = SR1Mod()
+
+#hessproxy = SR1Mod()
 #minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol}, hess=hessproxy)
 
 #minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 1e-8}, method = 'trust-ncg', hessp=hessp_fun)
@@ -115,7 +118,9 @@ hessproxy = SR1Mod()
 #minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 1e-8}, method = 'trust-ncg', hess=hessproxy)
 #optimizer = tf.train.AdagradOptimizer(0.01).minimize(l)
 #optncg = TrustNCG()
-optncg = TrustSR1()
+#optncg = TrustSR1Exact()
+#optncg = TrustSR1Subspace()
+optncg = TrustSR1SubspaceAlt()
 #optimizerinit = optncg.initialize(l,x,doSR1=False)
 optimizerinit = optncg.initialize(l,x,doSR1=True)
 optimizer = optncg.minimize(l,x)
@@ -177,7 +182,7 @@ def printstep(x):
 
 #minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol}, method = 'trust-constr', hessp=hesspfunc)
 #minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol}, method = 'trust-constr', hess=hessfunc)
-minimizer = tf.contrib.opt.ScipyOptimizerInterface(l, var_list = [x], options={'disp': True, 'maxiter' : 100000, 'gtol' : 0., 'inexact' : False}, method = 'trust-ncg', hessp=hesspfunc)
+#minimizer = tf.contrib.opt.ScipyOptimizerInterface(l, var_list = [x], options={'disp': True, 'maxiter' : 100000, 'gtol' : 0., 'inexact' : False}, method = 'trust-ncg', hessp=hesspfunc)
 #minimizer = tf.contrib.opt.ScipyOptimizerInterface(l, var_list = [x], options={'disp': True, 'maxiter' : 100000, 'xtol' : xtol}, method = 'Newton-CG', hessp=hesspfunc)
 
 
@@ -363,20 +368,21 @@ for itoy in range(ntoys):
   #hessproxy.setHessp(hesspfunc)
   #hessproxy.setHess(hessfunc)
   #if dofit:
-    ##ret = minimizer.minimize(sess)
+    #ret = minimizer.minimize(sess)
     #ret = minimizer.minimize(sess,fetches=[l],loss_callback=printstep)
-  sess.run(optimizerinit)
-  #optncg.setHessApprox(hesscomp.compute(sess),sess)
-  #optncg.setHessApprox(np.eye(nparms,dtype=dtype),sess)
-  for ifit in range(100000):
-    #print(ifit)
+  if dofit:
+    sess.run(optimizerinit)
+    #optncg.setHessApprox(hesscomp.compute(sess),sess)
+    #optncg.setHessApprox(np.eye(nparms,dtype=dtype),sess)
+    for ifit in range(100000):
+      #print(ifit)
 
-    lval,_ = sess.run([l,optimizer])
-    isconv = _[0]
-    print([ifit,lval])
-    #isconv = sess.run(optimizer)[0]
-    if (isconv):
-      break
+      lval,_ = sess.run([l,optimizer])
+      isconv = _[0]
+      print([ifit,lval])
+      #isconv = sess.run(optimizer)[0]
+      if (isconv):
+        break
     #lval = sess.run(l)
     #print(ifit)
     #if ifit%1==0:

@@ -22,7 +22,611 @@ from scipy.optimize import SR1, LinearConstraint, NonlinearConstraint, Bounds
 
 __all__ = ['ScipyTROptimizerInterface']
 
-class TrustSR1:
+class TrustSR1SubspaceAlt:
+    
+  def initialize(self, loss, var, initialtrustradius = 1.,doSR1=True):
+    
+    self.trustradius = tf.Variable(initialtrustradius*tf.ones_like(loss),trainable=False)
+    self.loss_old = tf.Variable(tf.zeros_like(loss), trainable=False)
+    self.predicted_reduction = tf.Variable(tf.zeros_like(loss), trainable = False)
+    self.var_old = tf.Variable(tf.zeros_like(var),trainable=False)
+    self.atboundary_old = tf.Variable(False, trainable=False)
+    self.doiter_old = tf.Variable(True, trainable = False)
+    self.grad_old = tf.Variable(tf.zeros_like(var), trainable=False)
+    self.isfirstiter = tf.Variable(True, trainable=False)
+    self.B = tf.Variable(tf.eye(int(var.shape[0]),dtype=var.dtype),trainable=False)
+    self.H = tf.Variable(tf.eye(int(var.shape[0]),dtype=var.dtype),trainable=False)
+    self.doscaling = tf.Variable(True, trainable = False)
+    self.negdir = tf.Variable(tf.ones_like(var),trainable = False)
+    #self.negcurve = tf.Variable(tf.zeros_like(loss),trainable = False)
+    #self.negdirage = tf.Variable(0,dtype=tf.int32)
+    self.grad = tf.gradients(loss,var, gate_gradients=True)[0]
+    
+        
+    alist = []
+    alist.append(tf.assign(self.trustradius,initialtrustradius))
+    alist.append(tf.assign(self.loss_old, loss))
+    alist.append(tf.assign(self.predicted_reduction, 0.))
+    alist.append(tf.assign(self.var_old, var))
+    alist.append(tf.assign(self.atboundary_old,False))
+    alist.append(tf.assign(self.doiter_old,False))
+    alist.append(tf.assign(self.isfirstiter,True))
+
+    alist.append(tf.assign(self.B,tf.eye(int(var.shape[0]),dtype=var.dtype)))
+    alist.append(tf.assign(self.H,tf.eye(int(var.shape[0]),dtype=var.dtype)))
+    alist.append(tf.assign(self.doscaling,True))
+    alist.append(tf.assign(self.grad_old,self.grad))
+    alist.append(tf.assign(self.negdir,tf.ones_like(var)))
+    #alist.append(tf.assign(self.negcurve,0.))
+    #alist.append(tf.assign(self.negdirage,0))
+    
+
+    return tf.group(alist)
+  
+  def setHessApprox(self,b,sess):
+    self.B.load(b,sess)
+    self.H.load(np.linalg.inv(b),sess)
+    self.doscaling.load(False, sess)
+    e,v = np.linalg.eigh(b)
+    #print('mineigval = %e' % e[0])
+    #print(v[0])
+    v0 = np.transpose(v)[0]
+    #bv = np.reshape(np.matmul(b,np.reshape(v0,[-1,1])),[-1])
+    #print(bv - e[0]*v0)
+    #curve = np.sum(v[0]*bv)
+    #print(curve)
+    self.negdir.load(v0,sess)
+  
+  def minimize(self, loss, var):
+    
+    xtol = np.finfo(var.dtype.as_numpy_dtype).eps
+    #edmtol = math.sqrt(xtol)
+    #edmtol = xtol
+    edmtol = 1e-8
+    #edmtol = 0.
+          
+    actual_reduction = self.loss_old - loss
+    
+    #actual_reduction = tf.Print(actual_reduction,[self.loss_old, loss, actual_reduction])
+    isnull = tf.logical_not(self.doiter_old)
+    rho = actual_reduction/self.predicted_reduction
+    rho = tf.where(tf.is_nan(loss), tf.zeros_like(loss), rho)
+    rho = tf.where(isnull, tf.ones_like(loss), rho)
+  
+    trustradius_out = tf.where(tf.less(rho,0.25),0.25*self.trustradius,tf.where(tf.logical_and(tf.greater(rho,0.75),self.atboundary_old),2.*self.trustradius, self.trustradius))
+    
+    def hesspexact(v):
+      return tf.gradients(self.grad*tf.stop_gradient(v),var, gate_gradients=True)[0]    
+    
+    def hesspapprox(B,v):
+      return tf.reshape(tf.matmul(B,tf.reshape(v,[-1,1])),[-1])    
+    
+    def doSR1Scaling(Bin,Hin,yin,dxin):
+      s_norm2 = tf.reduce_sum(tf.square(dxin))
+      y_norm2 = tf.reduce_sum(tf.square(yin))
+      ys = tf.abs(tf.reduce_sum(yin*dxin))
+      invalid = tf.equal(ys,0.) | tf.equal(y_norm2, 0.) | tf.equal(s_norm2, 0.)
+      scale = tf.where(invalid, tf.ones_like(ys), y_norm2/ys)
+      scale = tf.Print(scale,[scale],message = "doing sr1 scaling")
+      B = scale*Bin
+      H = Hin/scale
+      return (B,H,tf.constant(False))
+    
+    def doSR1Update(Bin,Hin,yin,dxin):
+      y = tf.reshape(yin,[-1,1])
+      dx = tf.reshape(dxin,[-1,1])
+      Bx = tf.matmul(Bin,dx)
+      dyBx = y - Bx
+      den = tf.matmul(dyBx,dx,transpose_a=True)
+      deltaB = tf.matmul(dyBx,dyBx,transpose_b=True)/den
+      dennorm = tf.sqrt(tf.reduce_sum(tf.square(dx)))*tf.sqrt(tf.reduce_sum(tf.square(dyBx)))
+      dentest = tf.less(tf.abs(den),1e-8*dennorm)
+      dentest = tf.reshape(dentest,[])
+      dentest = tf.logical_or(dentest,tf.equal(actual_reduction,0.))
+      deltaB = tf.where(dentest,tf.zeros_like(deltaB),deltaB)
+      #deltaB = tf.where(self.doiter_old, deltaB, tf.zeros_like(deltaB))
+      
+      Hy = tf.matmul(Hin,y)
+      dxHy = dx - Hy
+      deltaH = tf.matmul(dxHy,dxHy,transpose_b=True)/tf.matmul(dxHy,y,transpose_a=True)
+      deltaH = tf.where(dentest,tf.zeros_like(deltaH),deltaH)
+      #deltaH = tf.where(self.doiter_old, deltaH, tf.zeros_like(deltaH))
+      
+      B = Bin + deltaB
+      H = Hin + deltaH
+      return (B,H)
+    
+    grad = self.grad
+    B = self.B
+    H = self.H
+    
+    dgrad = grad - self.grad_old
+    dx = var - self.var_old
+    doscaling = tf.constant(False)
+    #B,H,doscaling = tf.cond(self.doscaling & self.doiter_old, lambda: doSR1Scaling(B,H,dgrad,dx), lambda: (B,H,self.doscaling))
+    B,H = tf.cond(self.doiter_old, lambda: doSR1Update(B,H,dgrad,dx), lambda: (B,H))    
+    
+    #keep track of direction with most negative curvature observed in last n iterations
+    #negdir = self.negdir
+    
+    isconvergedxtol = trustradius_out < xtol
+    isconvergededmtol = self.predicted_reduction <= 0.
+    
+    isconverged = self.doiter_old & (isconvergedxtol | isconvergededmtol)
+    
+    doiter = tf.logical_and(tf.greater(rho,0.15),tf.logical_not(isconverged))
+    
+    
+    
+    
+    #trustradius_out = tf.Print(trustradius_out,[self.loss_old, loss, actual_reduction,self.predicted_reduction,isnull,rho,trustradius_out,isconvergedxtol,isconvergededmtol,doiter])
+    
+    
+    def build_sol():
+      grad = self.grad
+      
+      eig,eigv = tf.self_adjoint_eig(B)
+      eig0 = eig[0]
+      #eig0 = tf.self_adjoint_eigvals(B)[0]
+      ispos = eig0>0.
+      
+      #solu = -hesspapprox(H,grad)
+      
+      def dfval_quad_full(v):
+        return tf.reduce_sum(grad*v) + 0.5*tf.reduce_sum(tf.reshape(tf.matmul(B,tf.reshape(v,[-1,1])),[-1])*v)        
+      
+      solu = tf.cond(ispos, lambda: -hesspapprox(H,grad), lambda: tf.zeros_like(var))
+      usesolu = ispos & (tf.reduce_sum(tf.square(solu)) < tf.square(trustradius_out))      
+      predicted_reduction_u = tf.cond(usesolu, lambda: -dfval_quad_full(solu), lambda: tf.zeros_like(loss))
+    
+      
+      def build_iter():
+
+        d0 = -grad
+        #usenegdir = negcurve < 0.
+        v0 = tf.transpose(eigv)[0]
+        d1 = tf.where(ispos, solu, v0)
+        
+        #c0 = tf.reduce_sum(v0*hesspapprox(B,v0))
+        
+        
+        d0 = d0/tf.sqrt(tf.reduce_sum(tf.square(d0)))
+        
+        d1 = d1 - tf.reduce_sum(d1*d0)*d0
+        d1 = d1/tf.sqrt(tf.reduce_sum(tf.square(d1)))
+        
+        Bd0 = hesspapprox(B,d0)
+        Bd1 = hesspapprox(B,d1)
+        
+        curve0 = tf.reduce_sum(d0*Bd0)
+        curve1 = tf.reduce_sum(d1*Bd1)
+        
+        #d1 = tf.Print(d1,[eig0,c0,curve0,curve1], message='curvature check')
+
+        
+        twograd = tf.stack([tf.reduce_sum(grad*d0),tf.reduce_sum(grad*d1)],axis=0)
+        twogradcol = tf.reshape(twograd,[-1,1])
+        
+        twohess0 = tf.stack([tf.reduce_sum(d0*Bd0),tf.reduce_sum(d0*Bd1)],axis=0)
+        twohess1 = tf.stack([tf.reduce_sum(d1*Bd0),tf.reduce_sum(d1*Bd1)],axis=0)
+        twohess = tf.stack([twohess0,twohess1],axis=0)
+        
+        def dfval_quad(twov):
+          return tf.reduce_sum(twograd*twov) + 0.5*tf.reduce_sum(tf.reshape(tf.matmul(twohess,tf.reshape(twov,[-1,1])),[-1])*twov)      
+
+
+        twoeig0 = tf.self_adjoint_eigvals(twohess)[0]
+
+
+        #start = -1.1*twoeig0
+        #lim = tf.maximum(-1.01*twoeig0, -twoeig0 + 0.1)
+        #lim = -twoeig0 + 1e-8
+        
+        eps = 1e-3
+        lim = tf.maximum(-(1.+eps)*twoeig0, -twoeig0 + eps)
+        start = lim
+        
+        alpha = tf.where(twoeig0>0., tf.zeros_like(start), start)
+        
+        
+        #alpha = tf.maximum(alpha,lim)
+        #alpha = tf.Print(alpha,[alpha])
+        twoeye = tf.eye(int(twohess.shape[0]),dtype=twohess.dtype)
+        for i in range(3):
+          #alpha = tf.Print(alpha,[alpha])
+          m = twohess + alpha*twoeye
+          r = tf.cholesky(m)
+          pl = -tf.cholesky_solve(r,twogradcol)
+          ql = tf.matrix_triangular_solve(r,pl,adjoint=True, lower=True)
+          plnormsq = tf.reduce_sum(tf.square(pl))
+          qlnormsq = tf.reduce_sum(tf.square(ql))
+          alpha = alpha + (plnormsq/qlnormsq)*(tf.sqrt(plnormsq)-trustradius_out)/trustradius_out
+          alpha = tf.maximum(alpha,lim)
+        
+        #usesolu = twoeig0>0. 
+        #usesolu = usesolu & (tf.reduce_sum(tf.square(solu)) < tf.square(trustradius_out))
+        #atboundary_out = tf.logical_not(usesolu)
+        
+        #print(solu.shape)
+        #print(pl.shape)
+        pl = tf.reshape(pl,[-1])
+        
+        #pl = tf.Print(pl,[pl, twohess, twograd,eig0,twoeig0],message = "twosol details:")
+
+        
+        predicted_reduction = -dfval_quad(pl)
+        
+        dvar = pl[0]*d0 + pl[1]*d1
+        
+        #pl = tf.where(usesolu,solu,pl)
+        #pl =tf.Print(pl,[pl])
+        
+        #predicted_reduction_out = -dfval_quad(pl)
+        #var_out = var + pl
+        #var_out = pl[0]*d0 + pl[1]*d1
+        
+        return (dvar,predicted_reduction)
+        
+        #return [var_out,predicted_reduction_out,atboundary_out,grad]
+
+      
+      
+      dvar,predicted_reduction_out = tf.cond(usesolu, lambda: (solu,predicted_reduction_u), lambda: build_iter())
+      #dvar = tf.Print(dvar,[dvar, twohess, twograd,d0,d1,twoeig0],message = "sol details:")
+      
+      #solmag = tf.sqrt(tf.reduce_sum(tf.square(sol)))
+      
+      #dvar = sol[0]*d0 + sol[1]*d1
+      dvarmag = tf.sqrt(tf.reduce_sum(tf.square(dvar)))
+      
+      #predicted_reduction_out = -dfval_quad(sol)
+      #predicted_reduction_out = tf.Print(predicted_reduction_out,[predicted_reduction_out,ispos,usesolu,dvarmag,trustradius_out],message='predicted_reduction_out')
+      
+      var_out = var + dvar
+      
+      return [var_out, predicted_reduction_out, tf.logical_not(usesolu), grad]
+
+    loopout = tf.cond(doiter, lambda: build_sol(), lambda: [self.var_old+0., tf.zeros_like(loss),tf.constant(False),self.grad_old])
+    var_out, predicted_reduction_out, atboundary_out, grad_out = loopout
+        
+    #var_out = tf.Print(var_out,[],message="var_out")
+    #loopout[0] = var_out
+    
+    alist = []
+    
+    with tf.control_dependencies(loopout):
+      oldvarassign = tf.assign(self.var_old,var)
+      alist.append(oldvarassign)
+      alist.append(tf.assign(self.loss_old,loss))
+      alist.append(tf.assign(self.doiter_old, doiter))
+      alist.append(tf.assign(self.B,B))
+      alist.append(tf.assign(self.H,H))
+      alist.append(tf.assign(self.doscaling,doscaling))
+      alist.append(tf.assign(self.grad_old,grad_out))
+      alist.append(tf.assign(self.predicted_reduction,predicted_reduction_out))
+      alist.append(tf.assign(self.atboundary_old, atboundary_out))
+      alist.append(tf.assign(self.trustradius, trustradius_out))
+      alist.append(tf.assign(self.isfirstiter,False)) 
+      #alist.append(tf.assign(self.negdir,negdir))
+      
+       
+    clist = []
+    clist.extend(loopout)
+    clist.append(oldvarassign)
+    with tf.control_dependencies(clist):
+      varassign = tf.assign(var, var_out)
+      #varassign = tf.Print(varassign,[],message="varassign")
+      
+      alist.append(varassign)
+      return [isconverged,tf.group(alist)]
+
+class TrustSR1Subspace:
+    
+  def initialize(self, loss, var, initialtrustradius = 1.,doSR1=True):
+    
+    self.trustradius = tf.Variable(initialtrustradius*tf.ones_like(loss),trainable=False)
+    self.loss_old = tf.Variable(tf.zeros_like(loss), trainable=False)
+    self.predicted_reduction = tf.Variable(tf.zeros_like(loss), trainable = False)
+    self.var_old = tf.Variable(tf.zeros_like(var),trainable=False)
+    self.atboundary_old = tf.Variable(False, trainable=False)
+    self.doiter_old = tf.Variable(True, trainable = False)
+    self.grad_old = tf.Variable(tf.zeros_like(var), trainable=False)
+    self.isfirstiter = tf.Variable(True, trainable=False)
+    self.B = tf.Variable(tf.eye(int(var.shape[0]),dtype=var.dtype),trainable=False)
+    self.H = tf.Variable(tf.eye(int(var.shape[0]),dtype=var.dtype),trainable=False)
+    self.doscaling = tf.Variable(True, trainable = False)
+    self.negdir = tf.Variable(tf.ones_like(var),trainable = False)
+    #self.negcurve = tf.Variable(tf.zeros_like(loss),trainable = False)
+    #self.negdirage = tf.Variable(0,dtype=tf.int32)
+    self.grad = tf.gradients(loss,var, gate_gradients=True)[0]
+    
+        
+    alist = []
+    alist.append(tf.assign(self.trustradius,initialtrustradius))
+    alist.append(tf.assign(self.loss_old, loss))
+    alist.append(tf.assign(self.predicted_reduction, 0.))
+    alist.append(tf.assign(self.var_old, var))
+    alist.append(tf.assign(self.atboundary_old,False))
+    alist.append(tf.assign(self.doiter_old,False))
+    alist.append(tf.assign(self.isfirstiter,True))
+
+    alist.append(tf.assign(self.B,tf.eye(int(var.shape[0]),dtype=var.dtype)))
+    alist.append(tf.assign(self.H,tf.eye(int(var.shape[0]),dtype=var.dtype)))
+    alist.append(tf.assign(self.doscaling,True))
+    alist.append(tf.assign(self.grad_old,self.grad))
+    alist.append(tf.assign(self.negdir,tf.ones_like(var)))
+    #alist.append(tf.assign(self.negcurve,0.))
+    #alist.append(tf.assign(self.negdirage,0))
+    
+
+    return tf.group(alist)
+  
+  def setHessApprox(self,b,sess):
+    self.B.load(b,sess)
+    self.H.load(np.linalg.inv(b),sess)
+    self.doscaling.load(False, sess)
+    e,v = np.linalg.eigh(b)
+    #print('mineigval = %e' % e[0])
+    #print(v[0])
+    v0 = np.transpose(v)[0]
+    #bv = np.reshape(np.matmul(b,np.reshape(v0,[-1,1])),[-1])
+    #print(bv - e[0]*v0)
+    #curve = np.sum(v[0]*bv)
+    #print(curve)
+    self.negdir.load(v0,sess)
+  
+  def minimize(self, loss, var):
+    
+    xtol = np.finfo(var.dtype.as_numpy_dtype).eps
+    #edmtol = math.sqrt(xtol)
+    #edmtol = xtol
+    edmtol = 1e-8
+    #edmtol = 0.
+          
+    actual_reduction = self.loss_old - loss
+    
+    #actual_reduction = tf.Print(actual_reduction,[self.loss_old, loss, actual_reduction])
+    isnull = tf.logical_not(self.doiter_old)
+    rho = actual_reduction/self.predicted_reduction
+    rho = tf.where(tf.is_nan(loss), tf.zeros_like(loss), rho)
+    rho = tf.where(isnull, tf.ones_like(loss), rho)
+  
+    trustradius_out = tf.where(tf.less(rho,0.25),0.25*self.trustradius,tf.where(tf.logical_and(tf.greater(rho,0.75),self.atboundary_old),2.*self.trustradius, self.trustradius))
+    
+    def hesspexact(v):
+      return tf.gradients(self.grad*tf.stop_gradient(v),var, gate_gradients=True)[0]    
+    
+    def hesspapprox(B,v):
+      return tf.reshape(tf.matmul(B,tf.reshape(v,[-1,1])),[-1])    
+    
+    def doSR1Scaling(Bin,Hin,yin,dxin):
+      s_norm2 = tf.reduce_sum(tf.square(dxin))
+      y_norm2 = tf.reduce_sum(tf.square(yin))
+      ys = tf.abs(tf.reduce_sum(yin*dxin))
+      invalid = tf.equal(ys,0.) | tf.equal(y_norm2, 0.) | tf.equal(s_norm2, 0.)
+      scale = tf.where(invalid, tf.ones_like(ys), y_norm2/ys)
+      scale = tf.Print(scale,[scale],message = "doing sr1 scaling")
+      B = scale*Bin
+      H = Hin/scale
+      return (B,H,tf.constant(False))
+    
+    def doSR1Update(Bin,Hin,yin,dxin):
+      y = tf.reshape(yin,[-1,1])
+      dx = tf.reshape(dxin,[-1,1])
+      Bx = tf.matmul(Bin,dx)
+      dyBx = y - Bx
+      den = tf.matmul(dyBx,dx,transpose_a=True)
+      deltaB = tf.matmul(dyBx,dyBx,transpose_b=True)/den
+      dennorm = tf.sqrt(tf.reduce_sum(tf.square(dx)))*tf.sqrt(tf.reduce_sum(tf.square(dyBx)))
+      dentest = tf.less(tf.abs(den),1e-8*dennorm)
+      dentest = tf.reshape(dentest,[])
+      dentest = tf.logical_or(dentest,tf.equal(actual_reduction,0.))
+      deltaB = tf.where(dentest,tf.zeros_like(deltaB),deltaB)
+      #deltaB = tf.where(self.doiter_old, deltaB, tf.zeros_like(deltaB))
+      
+      Hy = tf.matmul(Hin,y)
+      dxHy = dx - Hy
+      deltaH = tf.matmul(dxHy,dxHy,transpose_b=True)/tf.matmul(dxHy,y,transpose_a=True)
+      deltaH = tf.where(dentest,tf.zeros_like(deltaH),deltaH)
+      #deltaH = tf.where(self.doiter_old, deltaH, tf.zeros_like(deltaH))
+      
+      B = Bin + deltaB
+      H = Hin + deltaH
+      return (B,H)
+    
+    grad = self.grad
+    B = self.B
+    H = self.H
+    
+    dgrad = grad - self.grad_old
+    dx = var - self.var_old
+    doscaling = tf.constant(False)
+    #B,H,doscaling = tf.cond(self.doscaling & self.doiter_old, lambda: doSR1Scaling(B,H,dgrad,dx), lambda: (B,H,self.doscaling))
+    B,H = tf.cond(self.doiter_old, lambda: doSR1Update(B,H,dgrad,dx), lambda: (B,H))    
+    
+    #keep track of direction with most negative curvature observed in last n iterations
+    negdir = self.negdir
+    #negdir = tf.Print(negdir,[negdir]
+    #negdirage = self.negdirage
+    
+    negcurve = tf.reduce_sum(negdir*hesspapprox(B,negdir))/tf.reduce_sum(tf.square(negdir))
+    #negcurve = tf.Print(negcurve,[negcurve,negdir],message="negcurve:")
+    #negcurve = tf.where(negdirage<var.size[0], negcurve, tf.zeros_like(negcurve))
+    
+    curvature = tf.reduce_sum(dx*dgrad)/tf.reduce_sum(tf.square(dx))
+    ismostneg = curvature < negcurve
+    
+    negcurve = tf.where(ismostneg, curvature, negcurve)
+    negdir = tf.where(ismostneg, dx, negdir)
+    #negdirage = tf.where(ismostneg, tf.zeros_like(negdirage), negdirage+1)
+    
+    udir = -hesspapprox(H,grad)
+    curveu = tf.reduce_sum(udir*hesspapprox(B,udir))/tf.reduce_sum(tf.square(udir))
+    
+    isumostneg = curveu<negcurve
+    negcurve = tf.where(isumostneg, curveu, negcurve)
+    negdir = tf.where(isumostneg, udir, negdir)
+    
+    
+    isconvergedxtol = trustradius_out < xtol
+    isconvergededmtol = self.predicted_reduction <= 0.
+    
+    isconverged = self.doiter_old & (isconvergedxtol | isconvergededmtol)
+    
+    doiter = tf.logical_and(tf.greater(rho,0.15),tf.logical_not(isconverged))
+    
+    #trustradius_out = tf.Print(trustradius_out,[self.loss_old, loss, actual_reduction,self.predicted_reduction,isnull,rho,trustradius_out,isconvergedxtol,isconvergededmtol,doiter])
+    
+    
+    def build_sol():
+      grad = self.grad
+      
+      d0 = -grad
+      usenegdir = negcurve < 0.
+      d1 = tf.where(usenegdir, negdir, udir)
+      
+      d0 = d0/tf.sqrt(tf.reduce_sum(tf.square(d0)))
+      
+      d1 = d1 - tf.reduce_sum(d1*d0)*d0
+      d1 = d1/tf.sqrt(tf.reduce_sum(tf.square(d1)))
+ 
+      #d1 = tf.Print(d1,[negcurve,usenegdir])
+ 
+      #def dfval_quad(twov):
+          #return tf.reduce_sum(grad*twov) + 0.5*tf.reduce_sum(tf.reshape(tf.matmul(B,tf.reshape(twov,[-1,1])),[-1])*twov)      
+  
+      #def build_iter():
+
+      #twograd = grad
+      #twohess = B
+
+      #ispos = e0>0.
+      
+      #d0 = ng
+      #d1 = tf.where(ispos,nHg,v0)
+      
+      #norm0 = tf.reciprocal(tf.sqrt(tf.reduce_sum(tf.square(d0))))
+      #norm1 = tf.reciprocal(tf.sqrt(tf.reduce_sum(tf.square(d1))))
+      
+      #d0 *= norm0
+      #d1 *= norm1
+            
+      #Bd0 = norm0*Bng
+      #Bd1 = norm1*tf.where(ispos,BnHg, Bv0)
+      
+      Bd0 = hesspapprox(B,d0)
+      Bd1 = hesspapprox(B,d1)
+      
+      twograd = tf.stack([tf.reduce_sum(grad*d0),tf.reduce_sum(grad*d1)],axis=0)
+      twogradcol = tf.reshape(twograd,[-1,1])
+      
+      twohess0 = tf.stack([tf.reduce_sum(d0*Bd0),tf.reduce_sum(d0*Bd1)],axis=0)
+      twohess1 = tf.stack([tf.reduce_sum(d1*Bd0),tf.reduce_sum(d1*Bd1)],axis=0)
+      twohess = tf.stack([twohess0,twohess1],axis=0)
+      
+      def dfval_quad(twov):
+        return tf.reduce_sum(twograd*twov) + 0.5*tf.reduce_sum(tf.reshape(tf.matmul(twohess,tf.reshape(twov,[-1,1])),[-1])*twov)      
+      
+      solu = -tf.matrix_solve(twohess,twogradcol)
+      solu = tf.reshape(solu,[-1])
+      
+      twoeig0 = tf.self_adjoint_eigvals(twohess)[0]
+      
+      usesolu = twoeig0>0. 
+      usesolu = usesolu & (tf.reduce_sum(tf.square(solu)) < tf.square(trustradius_out))
+      #usesolu = tf.constant(False)
+      
+      def build_iter():
+
+        start = -1.1*twoeig0
+        lim = tf.maximum(-1.01*twoeig0, -twoeig0 + 0.1)
+        
+        alpha = tf.where(twoeig0>0., tf.zeros_like(start), start)
+        
+        #alpha = tf.maximum(alpha,lim)
+        #alpha = tf.Print(alpha,[alpha])
+        twoeye = tf.eye(int(twohess.shape[0]),dtype=twohess.dtype)
+        for i in range(8):
+          #alpha = tf.Print(alpha,[alpha])
+          m = twohess + alpha*twoeye
+          r = tf.cholesky(m)
+          pl = -tf.cholesky_solve(r,twogradcol)
+          ql = tf.matrix_triangular_solve(r,pl,adjoint=True, lower=True)
+          plnormsq = tf.reduce_sum(tf.square(pl))
+          qlnormsq = tf.reduce_sum(tf.square(ql))
+          alpha = alpha + (plnormsq/qlnormsq)*(tf.sqrt(plnormsq)-trustradius_out)/trustradius_out
+          alpha = tf.maximum(alpha,lim)
+        
+        #usesolu = twoeig0>0. 
+        #usesolu = usesolu & (tf.reduce_sum(tf.square(solu)) < tf.square(trustradius_out))
+        #atboundary_out = tf.logical_not(usesolu)
+        
+        #print(solu.shape)
+        #print(pl.shape)
+        pl = tf.reshape(pl,[-1])
+        #pl = tf.where(usesolu,solu,pl)
+        #pl =tf.Print(pl,[pl])
+        
+        #predicted_reduction_out = -dfval_quad(pl)
+        #var_out = var + pl
+        #var_out = pl[0]*d0 + pl[1]*d1
+        
+        return pl
+        
+        #return [var_out,predicted_reduction_out,atboundary_out,grad]
+
+      
+      
+      sol = tf.cond(usesolu, lambda: solu, lambda: build_iter())
+      #sol = tf.Print(sol,[sol, twohess, twograd,d0,d1,twoeig0],message = "sol details:")
+      
+      solmag = tf.sqrt(tf.reduce_sum(tf.square(sol)))
+      
+      dvar = sol[0]*d0 + sol[1]*d1
+      dvarmag = tf.sqrt(tf.reduce_sum(tf.square(dvar)))
+      
+      predicted_reduction_out = -dfval_quad(sol)
+      #predicted_reduction_out = tf.Print(predicted_reduction_out,[predicted_reduction_out,usesolu,solmag,dvarmag,trustradius_out],message='predicted_reduction_out')
+      
+      var_out = var + dvar
+      
+      return [var_out, predicted_reduction_out, tf.logical_not(usesolu), grad]
+
+    loopout = tf.cond(doiter, lambda: build_sol(), lambda: [self.var_old+0., tf.zeros_like(loss),tf.constant(False),self.grad_old])
+    var_out, predicted_reduction_out, atboundary_out, grad_out = loopout
+        
+    #var_out = tf.Print(var_out,[],message="var_out")
+    #loopout[0] = var_out
+    
+    alist = []
+    
+    with tf.control_dependencies(loopout):
+      oldvarassign = tf.assign(self.var_old,var)
+      alist.append(oldvarassign)
+      alist.append(tf.assign(self.loss_old,loss))
+      alist.append(tf.assign(self.doiter_old, doiter))
+      alist.append(tf.assign(self.B,B))
+      alist.append(tf.assign(self.H,H))
+      alist.append(tf.assign(self.doscaling,doscaling))
+      alist.append(tf.assign(self.grad_old,grad_out))
+      alist.append(tf.assign(self.predicted_reduction,predicted_reduction_out))
+      alist.append(tf.assign(self.atboundary_old, atboundary_out))
+      alist.append(tf.assign(self.trustradius, trustradius_out))
+      alist.append(tf.assign(self.isfirstiter,False)) 
+      alist.append(tf.assign(self.negdir,negdir))
+      
+       
+    clist = []
+    clist.extend(loopout)
+    clist.append(oldvarassign)
+    with tf.control_dependencies(clist):
+      varassign = tf.assign(var, var_out)
+      #varassign = tf.Print(varassign,[],message="varassign")
+      
+      alist.append(varassign)
+      return [isconverged,tf.group(alist)]
+
+class TrustSR1Exact:
     
   def initialize(self, loss, var, initialtrustradius = 1.,doSR1=True):
     
@@ -173,7 +777,6 @@ class TrustSR1:
       def dfval_quad(twov):
           return tf.reduce_sum(grad*twov) + 0.5*tf.reduce_sum(tf.reshape(tf.matmul(B,tf.reshape(twov,[-1,1])),[-1])*twov)      
   
-
       def build_iter():
 
         twograd = grad
@@ -208,8 +811,14 @@ class TrustSR1:
         #twoeig0 = tf.self_adjoint_eigvals(twohess)[0]
         twoeig0 = e0
         #lim = -twoeig0 + 1e-8
-        start = -1.1*twoeig0
-        lim = tf.maximum(-1.01*twoeig0, twoeig0 + 0.1)
+        #start = -1.1*twoeig0
+        eps = 1e-3
+        lim = tf.maximum(-(1.+eps)*twoeig0, -twoeig0 + eps)
+        #lim = -twoeig0 + 1e-2
+        #lim = (-1. + 1e-3)*twoeig0
+        start = lim
+        #lim = -twoeig0 + 1e-8
+
         
         alpha = tf.where(twoeig0>0., tf.zeros_like(start), start)
         
@@ -221,9 +830,7 @@ class TrustSR1:
           m = twohess + alpha*twoeye
           r = tf.cholesky(m)
           pl = -tf.cholesky_solve(r,twogradcol)
-          #pl = -tf.matrix_solve(m,twogradcol)
           ql = tf.matrix_triangular_solve(r,pl,adjoint=True, lower=True)
-          #ql = tf.matrix_solve(tf.transpose(r),pl)
           plnormsq = tf.reduce_sum(tf.square(pl))
           qlnormsq = tf.reduce_sum(tf.square(ql))
           alpha = alpha + (plnormsq/qlnormsq)*(tf.sqrt(plnormsq)-trustradius_out)/trustradius_out

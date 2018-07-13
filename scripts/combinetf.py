@@ -2,6 +2,7 @@
 import re
 from sys import argv, stdout, stderr, exit, modules
 from optparse import OptionParser
+import time
 
 import tensorflow as tf
 import numpy as np
@@ -118,9 +119,9 @@ minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,u
 #minimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 1e-8}, method = 'trust-ncg', hess=hessproxy)
 #optimizer = tf.train.AdagradOptimizer(0.01).minimize(l)
 #optncg = TrustNCG()
-#optncg = TrustSR1Exact()
+optncg = TrustSR1Exact()
 #optncg = TrustSR1Subspace()
-optncg = TrustSR1SubspaceAlt()
+#optncg = TrustSR1SubspaceAlt()
 #optimizerinit = optncg.initialize(l,x,doSR1=False)
 optimizerinit = optncg.initialize(l,x,doSR1=True)
 optimizer = optncg.minimize(l,x)
@@ -159,14 +160,14 @@ bayesassign = tf.assign(x, tf.concat([xpoi,theta+tf.random_normal(shape=theta.sh
 #initialize tf session
 if options.nThreads>0:
   config = tf.ConfigProto(intra_op_parallelism_threads=options.nThreads, inter_op_parallelism_threads=options.nThreads,
-                          #device_count = {'GPU': 0},
+                          device_count = {'GPU': 0},
                           )
 else:
   config = None
 
-#config = tf.ConfigProto(
-        #device_count = {'GPU': 0}
-    #)
+config = tf.ConfigProto(
+        device_count = {'GPU': 0}
+    )
 
 sess = tf.Session(config=config)
 
@@ -367,22 +368,45 @@ for itoy in range(ntoys):
   #hessproxy.setInitxg(sess.run([x,grad]))
   #hessproxy.setHessp(hesspfunc)
   #hessproxy.setHess(hessfunc)
-  #if dofit:
-    #ret = minimizer.minimize(sess)
-    #ret = minimizer.minimize(sess,fetches=[l],loss_callback=printstep)
+  
+  print("timing likelihood evaluation")
+  t0 = time.time()
+  niter = 1*1000
+  for i in range(niter):
+    lval = sess.run(l)
+    #print(lval)
+  dt = time.time() - t0
+  print("did %i iterations in %f s" % (niter,dt))
+  
+  print("timing likelihood + gradient evaluation")
+  t0 = time.time()
+  niter = 1*1000
+  for i in range(niter):
+    lval,gval = sess.run([l,grad])
+    #print(lval)
+  dt = time.time() - t0
+  print("did %i iterations in %f s" % (niter,dt))
+  
+  t0 = time.time()
   if dofit:
-    sess.run(optimizerinit)
-    #optncg.setHessApprox(hesscomp.compute(sess),sess)
-    #optncg.setHessApprox(np.eye(nparms,dtype=dtype),sess)
-    for ifit in range(100000):
-      #print(ifit)
+    ret = minimizer.minimize(sess)
+    #ret = minimizer.minimize(sess,fetches=[l],loss_callback=printstep)
+  #if dofit:
+    #sess.run(optimizerinit)
+    ##optncg.setHessApprox(hesscomp.compute(sess),sess)
+    ##optncg.setHessApprox(np.eye(nparms,dtype=dtype),sess)
+    #niter = 0
+    #for ifit in range(100000):
+      ##print(ifit)
 
-      lval,_ = sess.run([l,optimizer])
-      isconv = _[0]
-      print([ifit,lval])
-      #isconv = sess.run(optimizer)[0]
-      if (isconv):
-        break
+      #lval,_ = sess.run([l,optimizer])
+      #isconv = _[0]
+      #print([ifit,lval])
+      #niter += 1
+      ##isconv = sess.run(optimizer)[0]
+      #if (isconv):
+        #break
+    #print("fit complete in %i iterations" % niter)
     #lval = sess.run(l)
     #print(ifit)
     #if ifit%1==0:
@@ -394,10 +418,14 @@ for itoy in range(ntoys):
     #if ifit % 100 == 0:
       #print(ifit)
 
+  dt = time.time() - t0
+  print("fit complete in %f s" % dt)
 
   #get fit output
   xval, outvalss, thetavals, theta0vals, nllval, gradval = sess.run([x,outputs,theta,theta0,l,grad])
   #compute hessian
+  print("timing hessian computation")
+  t0 = time.time()
   hessval = hesscomp.compute(sess)
   #print(hessval.shape)
   #print(hessval)
@@ -421,6 +449,8 @@ for itoy in range(ntoys):
   print("status = %i, errstatus = %i, nllval = %f, edmval = %e, mineigval = %e" % (status,errstatus,nllval,edmval,mineig))  
   
   fullsigmasv = np.sqrt(np.diag(invhessval))
+  dt = time.time() - t0
+  print("computed hessian and uncertainties in %f s" % dt)
   if errstatus==0:
     thetasigmasv = fullsigmasv[npoi:]
   else:

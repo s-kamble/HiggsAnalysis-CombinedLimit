@@ -222,9 +222,10 @@ class TrustSR1SubspaceAlt:
         #lim = tf.maximum(-1.01*twoeig0, -twoeig0 + 0.1)
         #lim = -twoeig0 + 1e-8
         
-        eps = 1e-3
+        eps = 1e-2
         lim = tf.maximum(-(1.+eps)*twoeig0, -twoeig0 + eps)
-        start = lim
+        #start = lim
+        start = -2.*twoeig0
         
         alpha = tf.where(twoeig0>0., tf.zeros_like(start), start)
         
@@ -812,11 +813,12 @@ class TrustSR1Exact:
         twoeig0 = e0
         #lim = -twoeig0 + 1e-8
         #start = -1.1*twoeig0
-        eps = 1e-3
+        eps = 1e-2
         lim = tf.maximum(-(1.+eps)*twoeig0, -twoeig0 + eps)
         #lim = -twoeig0 + 1e-2
         #lim = (-1. + 1e-3)*twoeig0
-        start = lim
+        #start = lim
+        start = -2.*twoeig0
         #lim = -twoeig0 + 1e-8
 
         

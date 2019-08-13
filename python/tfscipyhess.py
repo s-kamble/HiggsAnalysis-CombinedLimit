@@ -142,8 +142,52 @@ def sum_loop(loop_fn, loop_fn_accumulators, iters, parallel_iterations=10, back_
 
 class ScipyTROptimizerInterface(ExternalOptimizerInterface):
 
-  _DEFAULT_METHOD = 'trust-constr'
+  #_DEFAULT_METHOD = 'trust-constr'
+  _DEFAULT_METHOD = 'trust-ncg'
+  #_DEFAULT_METHOD = 'trust-krylov'
+  #_DEFAULT_METHOD = 'L-BFGS-B'
+  
+  def __init__(self,
+               loss,
+               var_list=None,
+               equalities=None,
+               inequalities=None,
+               var_to_bounds=None,
+               **optimizer_kwargs):
+    
+    super().__init__(
+               loss,
+               var_list,
+               equalities,
+               inequalities,
+               var_to_bounds,
+               **optimizer_kwargs)
+    
+    grad = self._packed_loss_grad
+    var = self._vars[0]
+    self._vp = tf.placeholder(dtype=var.dtype,shape=var.shape)
+    self._hessp = tf.gradients(grad*self._vp,var,stop_gradients=self._vp)[0]
 
+  def minimize(self,
+               session=None,
+               feed_dict=None,
+               fetches=None,
+               step_callback=None,
+               loss_callback=None,
+               **run_kwargs):
+    
+    def hesspfunc(x,v):
+      return session.run(self._hessp,feed_dict={self._vp:v})
+
+    self._hesspfunc = hesspfunc
+    
+    return super().minimize(
+               session,
+               feed_dict,
+               fetches,
+               step_callback,
+               loss_callback,
+               **run_kwargs)
 
   def _minimize(self, initial_val, loss_grad_func, equality_funcs,
                 equality_grad_funcs, inequality_funcs, inequality_grad_funcs,
@@ -178,7 +222,9 @@ class ScipyTROptimizerInterface(ExternalOptimizerInterface):
     minimize_args = [loss_grad_func, initial_val]
     minimize_kwargs = {
         'jac': True,
-        'hess' : hess,
+        #'hess' : hess,
+        #'hess': hessfunc,
+        'hessp' : self._hesspfunc,
         'callback': None,
         'method': method,
         'constraints': constraints,

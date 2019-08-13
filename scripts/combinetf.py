@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+import os
+#os.environ["CUDA_VISIBLE_DEVICES"]="-1" 
+
+
 import re
 from sys import argv, stdout, stderr, exit, modules
 from optparse import OptionParser
@@ -18,7 +22,7 @@ import h5py
 import h5py_cache
 from HiggsAnalysis.CombinedLimit.tfh5pyutils import maketensor,makesparsetensor
 from HiggsAnalysis.CombinedLimit.tfsparseutils import simple_sparse_tensor_dense_matmul, simple_sparse_slice0begin, simple_sparse_to_dense, SimpleSparseTensor, makeCache
-from HiggsAnalysis.CombinedLimit.lsr1trustobs import SR1TrustExact
+from HiggsAnalysis.CombinedLimit.lsr1trustobs import SR1TrustExact, LSR1TrustOBS, TrustNCG
 import scipy
 import math
 import time
@@ -36,6 +40,9 @@ from root_numpy import array2hist
 from array import array
 
 from HiggsAnalysis.CombinedLimit.tfscipyhess import ScipyTROptimizerInterface,jacobian,sum_loop
+#from HiggsAnalysis.CombinedLimit.tfscipyhess import ScipyTROptimizerInterface,sum_loop
+from tensorflow.python.ops.parallel_for.gradients import jacobian as jacobianpfor
+from tensorflow.python.ops.parallel_for.gradients import batch_jacobian
 
 parser = OptionParser(usage="usage: %prog [options] datacard.txt -o output \nrun with --help to get list of options")
 parser.add_option("-o","--output", default=None, type="string", help="output file name")
@@ -192,6 +199,19 @@ else:
   xdefault = thetadefault
   
 x = tf.Variable(xdefault, name="x")
+xvar = x
+
+#xm = tf.expand_dims(xvar,axis=0)*tf.ones([xvar.shape[0],xvar.shape[0]],dtype=xvar.dtype)
+#x = tf.reduce_mean(xm,axis=0)
+
+#u = tf.ones_like(xvar)
+
+#ox = tf.ones_like(xvar)
+#om = tf.ones(shape=[x.shape[0],x.shape[0]],dtype=x.dtype)
+#ox = tf.reduce_prod(om,axis=0)
+#oy = tf.reduce_prod(om,axis=-1)
+
+#x = xvar*u
 
 xpoi = x[:npoi]
 theta = x[npoi:]
@@ -226,11 +246,14 @@ mthetaalpha = tf.reshape(mthetaalpha,[2*nsyst,1])
 
 if sparse:  
   logsnorm = simple_sparse_tensor_dense_matmul(logk_sparse,mthetaalpha)
+  #logsnorm = tf.sparse.sparse_dense_matmul(logk_sparse,mthetaalpha)
   logsnorm = tf.squeeze(logsnorm,-1)
   snorm = tf.exp(logsnorm)
   
   snormnorm_sparse = SimpleSparseTensor(norm_sparse.indices, snorm*norm_sparse.values, norm_sparse.dense_shape)
+  #snormnorm_sparse = tf.sparse.SparseTensor(norm_sparse.indices, snorm*norm_sparse.values, norm_sparse.dense_shape)
   nexpfullcentral = simple_sparse_tensor_dense_matmul(snormnorm_sparse,mrnorm)
+  #nexpfullcentral = tf.sparse.sparse_dense_matmul(snormnorm_sparse,mrnorm)
   nexpfullcentral = tf.squeeze(nexpfullcentral,-1)
 
   #slice the sparse tensor along axis 0 only, since this is simpler than slicing in
@@ -238,10 +261,12 @@ if sparse:
   #after this the result should be relatively small in any case and  further
   #manipulations can be done more efficiently after converting to dense
   snormnormmasked0_sparse = simple_sparse_slice0begin(snormnorm_sparse, nbins, doCache=True)
+  #snormnormmasked0_sparse = tf.sparse.slice(snormnorm_sparse, [nbins,0], [nbinsmasked,nproc])
   snormnormmasked0 = simple_sparse_to_dense(snormnormmasked0_sparse)
   snormnormmasked = snormnormmasked0[:,:nsignals]
   
   normmasked0_sparse = simple_sparse_slice0begin(norm_sparse, nbins, doCache=True)
+  #normmasked0_sparse = tf.sparse.slice(norm_sparse, [nbins,0],[nbinsmasked,nproc])
   normmasked0 = simple_sparse_to_dense(normmasked0_sparse)
   normmasked = normmasked0[:,:nsignals]
   
@@ -406,7 +431,9 @@ if options.POIMode == "mu":
   for signal in signals:
     outputname.append("%s_%s" % (signal,options.POIMode))
 outputnames.append(outputname)
-  
+
+taureg = -1.
+
 if options.POIMode == "mu":  
   if nbinsmasked>0:
     outputs.append(pmaskedexp)
@@ -523,7 +550,6 @@ if options.POIMode == "mu":
       outputnames.append(outputname)
 
   #regularization
-  taureg = -1.
   if options.doRegularization and nreggroups > 0:
     if options.regularizationUseExpected:
       regsource = poi
@@ -557,8 +583,187 @@ if nthreadshess<0:
   nthreadshess = multiprocessing.cpu_count()
 nthreadshess = min(nthreadshess,nparms)
 
-grad = tf.gradients(l,x,gate_gradients=True)[0]  
-hessian = jacobian(grad,x,gate_gradients=True,parallel_iterations=nthreadshess,back_prop=False)
+#def jacobiantricky(y,x):
+  
+  #g1 = jacobianpfor(y,x,use_pfor=True)
+  
+  ##g1 = tf.gradients(l,x,gate_gradients=True)[0]
+  ##g2 = g1*tf.eye(int(x.shape[0]),dtype=x.dtype)
+  ##g3 = tf.gradients(g2,xm,gate_gradients=True)[0]
+  
+  ##print("g3.shape")
+  ##print(g3.shape)
+  #return g1
+  
+  ##v = tf.ones_like(y)
+  ##u = tf.ones_like(y)
+  ##om = tf.ones(shape=[x.shape[0],y.shape[0]],dtype=x.dtype)
+  ##diag = tf.expand_dims(tf.sqrt(tf.linalg.tensor_diag_part(om)),axis=-1)
+  ##v = tf.reduce_mean(om/diag,axis=0)
+  ##v = tf.reduce_sum(om/tf.sqrt(tf.linalg.tensor_diag_part(om)),axis=-1) + tf.reduce_sum(om/tf.sqrt(tf.linalg.tensor_diag_part(om)),axis=0)
+  ##v *= 0.5
+  ##v = tf.sqrt(tf.linalg.tensor_diag_part(om))
+  ##v = tf.linalg.tensor_diag_part(om)
+  ##print("v.shape")
+  ##print(v.shape)
+  
+  ##g1 = tf.gradients(y*v*u,x,gate_gradients=True)[0]
+  ##g2  = g1*v
+  ##g3 = tf.gradients(g2,v,gate_gradients=True)[0]
+  ##g4 = tf.gradients(g2,u,gate_gradients=True)[0]
+  ##g5 = g3 - g4
+  
+
+  ###g1 = tf.gradients(l,x,gate_gradients=True,stop_gradients=u)[0]
+  ###g2 = tf.gradients(g1,x,gate_gradients=True,stop_gradients=u)[0]
+  ###g3 = jacobian(g1,u,gate_gradients=True,parallel_iterations=nthreadshess,back_prop=False)
+  ###g3 = jacobianpfor(g1,u,use_pfor=False)
+  ##print("g5.shape")
+  ##print(g5.shape)
+  ##return g3
+  
+  ##g1 = tf.gradients(l,x,gate_gradients=True)[0]
+
+##def jacobiantricky(y,x):
+  
+  
+  
+  ##x = tf.constant([0.,1.,2.,3.,4.],dtype=x.dtype)
+  ##x = tf.reshape(x,[-1,1])
+  ##y = x*x*x
+  ##y = tf.reduce_sum(x*x*x)
+  
+  ##g = batch_jacobian(y,x,use_pfor=False)
+  ##g1 = tf.gradients(y,x,gate_gradients=True)[0]
+  ##g = batch_jacobian(g1,x,use_pfor=False)
+  ##print("g.shape")
+  ##print(g.shape)
+  
+  ##g = batch_jacobian(tf.reshape(y,[-1,1]),tf.reshape(x,[-1,1]),use_pfor=False)
+  
+  ##xr = x[0:1]
+  ##g1 = tf.gradients(l,xr,gate_gradients=True)[0]
+  ##g1 = jacobianpfor(l,x,use_pfor=False)
+  
+  ##y = tf.reshape(y,[-1,1])
+  ##v = tf.ones_like(y)
+  ##g1 = tf.gradients(y*v,x,gate_gradients=False,stop_gradients=v)[0]
+  ##g = jacobian(g1,v,gate_gradients=False,parallel_iterations=nthreadshess,back_prop=False,stop_gradients=y)
+  ###g = batch_jacobian(g1,v,use_pfor=False)
+  ###g = jacobianpfor(y,x,use_pfor=True)
+  ###g = tf.gradients(y[0],x,gate_gradients=True)[0]
+  ###g = jacobianpfor(y,x,use_pfor=False,parallel_iterations=32)
+  ###g = batch_jacobian(y[0:1],x,use_pfor=False)
+  ##print("g.shape")
+  ###print(y.shape)
+  ###print(x.shape)
+  ##print(g.shape)
+  
+  ##return g
+  
+  ##v = tf.ones_like(y)
+  ##u = tf.ones_like(x)
+  
+  ##g1 = tf.gradients(y*v,x,gate_gradients=True,stop_gradients=v)[0]
+  
+  ##g2 = tf.gradients(g1*u,v,gate_gradients=True,stop_gradients=[y,u])[0]
+  
+  ##g3 = jacobianpfor(g2,u,use_pfor=False)
+  
+  ##ov = tf.ones(shape=[x.shape[0]*y.shape[0],1],dtype=x.dtype)
+  ##om = tf.reshape(ov,[x.shape[0],y.shape[0]])
+  ##om = tf.ones(shape=[x.shape[0],y.shape[0]],dtype=x.dtype)
+  
+  ##ox = tf.reduce_prod(om,axis=-1)
+  ##oy = tf.reduce_prod(om,axis=0)
+  
+  ##g1 = tf.gradients(y*oy,x,gate_gradients=True)[0]
+  ##g2 = g1*ox
+  ##g3 = tf.reduce_sum(g2)
+  ##g4 = jacobianpfor(g3,om,use_pfor=False)
+  ##g3 = tf.gradients(g2,om,gate_gradients=True)[0]
+  ##g4 = tf.reshape(g3,[-1,1])
+  ##g5 = 0.5*batch_jacobian(g3,ov,use_pfor=False)
+  ##g6 = tf.reshape(g5,[x.shape[0],y.shape[0]])
+  ##return g3
+  
+  ##u = tf.ones_like(x)
+  ##g1 = tf.gradients(y*v,x,gate_gradients=True)[0]
+  ##g2 = tf.gradients(g1*u,v,gate_gradients=True)[0]
+  ##g1 = tf.gradients(y,x,gate_gradients=True)[0]
+  ##g2 = tf.gradients(g1,v,gate_gradients=True)[0]
+  ##g3 = jacobianpfor(g2,u)
+  
+  
+  
+  ##g2 = jacobianpfor(g1,v,use_pfor=True)
+  ##return g3
+  
+  ##v = tf.ones(shape=[y.shape[0],1],dtype=y.dtype)
+  ##vf = tf.reshape(v,[-1])
+  ##g1 = tf.gradients(y*vf,x,gate_gradients=True,stop_gradients=vf)[0]
+  ##g2 = jacobianpfor(tf.reshape(g1,[-1,1]),v)
+  ##g3 = tf.reshape(g2,[-1])
+  ##re
+  
+  ##oy = tf.ones_like(y)
+  ##oxx = tf.ones_like(x)
+  
+  ##ox = tf.ones_like(x)
+  ##om = tf.expand_dims(ox,axis=0)*tf.expand_dims(ox,axis=-1)
+  
+  ##ov = tf.ones(shape=[y.shape[0]*x.shape[0],1],dtype=x.dtype)
+  ##om = tf.reshape(ov,[y.shape[0],x.shape[0]])
+  
+  ##oy = tf.reduce_prod(om,axis=-1)
+  ##ox = tf.reduce_prod(om,axis=0)
+  ##oxy = tf.reduce_prod(om)
+  
+  ##g1 = batch_jacobian(tf.reshape(y,[-1,1]),x,use_pfor=False)
+  ##return g1
+                      
+  
+  ##g1 = tf.gradients(y*oy,x,gate_gradients=True)[0]
+  ##g2 = tf.gradients(g1*ox,om,gate_gradients=True)[0]
+  ##g3 = 0.5*batch_jacobian(tf.reshape(g2,[-1,1]),ov,use_pfor=False)
+  ##g4 = tf.reshape(g3,[y.shape[0],x.shape[0]])
+  ##g2 = tf.gradients(g1*oy/ox,om,gate_gradients=True)[0]
+  
+  ##eye = tf.eye(int(x.shape[0]),dtype=x.dtype)
+  
+  ##g1 = tf.gradients(y,x,gate_gradients=True)[0]
+  ##g2 = tf.gradients(g1*eye,eye,gate_gradients=True)[0]
+  
+  ##return g4
+
+grad = tf.gradients(l,x,gate_gradients=True)[0]
+if sparse:
+#if True:
+  hessian = jacobian(grad,x,gate_gradients=True,parallel_iterations=nthreadshess,back_prop=False)
+  #hessian = jacobianpfor(grad,x,use_pfor=False,parallel_iterations=nthreadshess)
+else:
+  hessian = jacobianpfor(grad,x,use_pfor=True)
+ 
+#def hessbody(j):
+  #gradsel = tf.gather(grad,j)
+  #hessrow = tf.gradients(gradsel,x,gate_gradients=True)[0]
+  #return hessrow
+
+#def cond(j):
+  #return tf.less(j,x.shape[0])
+
+#hessian = tf.while_loop(hessbody,cond,[0])
+ 
+#hessian = jacobianpfor(grad,x,use_pfor=False,parallel_iterations=nthreadshess)
+ 
+#hessian = jacobian(grad,x,gate_gradients=True,parallel_iterations=nthreadshess,back_prop=False)
+
+#hessian = jacobianpfor(grad,x)
+#hessiant = jacobiantricky(grad,x)
+#hessiant = jacobiantricky()
+#hessiant = batch_jacobian(
+#hessian = jacobianpfor(grad,x,use_pfor=False, parallel_iterations=nthreadshess)
+#hessian = jacobianpfor(grad,x,use_pfor=False)
 
 eigvals = tf.self_adjoint_eigvals(hessian)
 mineigv = tf.reduce_min(eigvals)
@@ -707,11 +912,17 @@ edmtol = math.sqrt(xtol)
 btol = 1e-8
 
 if options.useSciPyMinimizer:
-  scipyminimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
+  #scipyminimizer = ScipyTROptimizerInterface(l, var_list = [xvar], var_to_bounds={xvar: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
+  scipyminimizer = ScipyTROptimizerInterface(l, var_list = [xvar], var_to_bounds={xvar: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol, 'disp' : 9})
+  #scipyminimizer = ScipyTROptimizerInterface(l, var_list = [xvar], var_to_bounds={xvar: (lb,ub)}, hess = hessian, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
 else:
-  tfminimizer = SR1TrustExact(l,x,grad)
-  opinit = tfminimizer.initialize(l,x,grad,hessian)
-  opmin = tfminimizer.minimize(l,x,grad)
+  #tfminimizer = SR1TrustExact(l,xvar,grad)
+  tfminimizer = TrustNCG(l,xvar,grad,doSR1=False)
+  #tfminimizer = LSR1TrustOBS(l,xvar,grad,k=7)
+  #opinit = tfminimizer.initialize(l,xvar,grad,hessian)
+  opinit = tfminimizer.initialize(l,xvar,grad)
+  #opmin = tfminimizer.minimize(l,xvar,grad)
+  opmin = tfminimizer.minimize(l,xvar,grad,hessian)
 
 outidxmap = {}
 outsubidxmap = {}
@@ -740,8 +951,8 @@ for scanvar in scanvars:
   errdir = tf.Variable(np.zeros(scanvar.shape,dtype=dtype),trainable=False)
   errproj = -tf.reduce_sum((scanvar-x0)*errdir,axis=0)
   dxconstraint = a + errproj
-  scanminimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)},  equalities=[dxconstraint], options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
-  minosminimizer = ScipyTROptimizerInterface(errproj, var_list = [x], var_to_bounds={x: (lb,ub)},  equalities=[dlconstraint], options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
+  scanminimizer = ScipyTROptimizerInterface(l, var_list = [xvar], var_to_bounds={xvar: (lb,ub)},  equalities=[dxconstraint], options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
+  minosminimizer = ScipyTROptimizerInterface(errproj, var_list = [xvar], var_to_bounds={xvar: (lb,ub)},  equalities=[dlconstraint], options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
   scanminimizers.append(scanminimizer)
   minosminimizers.append(minosminimizer)
   x0s.append(x0)
@@ -751,15 +962,15 @@ globalinit = tf.global_variables_initializer()
 nexpnomassign = tf.assign(nexpnom,nexpcentral)
 dataobsassign = tf.assign(nobs,data_obs)
 asimovassign = tf.assign(nobs,nexpgen)
-asimovrandomizestart = tf.assign(x,tf.clip_by_value(tf.contrib.distributions.MultivariateNormalFullCovariance(x,invhessian).sample(),lb,ub))
+asimovrandomizestart = tf.assign(xvar,tf.clip_by_value(tf.contrib.distributions.MultivariateNormalFullCovariance(x,invhessian).sample(),lb,ub))
 bootstrapassign = tf.assign(nobs,tf.random_poisson(nobs,shape=[],dtype=dtype))
 toyassign = tf.assign(nobs,tf.random_poisson(nexpgen,shape=[],dtype=dtype))
 #TODO properly implement randomization of constraint parameters associated with bin-by-bin stat nuisances for frequentist toys,
 #currently bin-by-bin stat fluctuations are always handled in a bayesian way in toys
 #this also means bin-by-bin stat fluctuations are not consistently propagated for bootstrap toys from data
 frequentistassign = tf.assign(theta0,theta + tf.random_normal(shape=theta.shape,dtype=dtype))
-thetastartassign = tf.assign(x, tf.concat([xpoi,theta0],axis=0))
-bayesassign = tf.assign(x, tf.concat([xpoi,theta+tf.random_normal(shape=theta.shape,dtype=dtype)],axis=0))
+thetastartassign = tf.assign(xvar, tf.concat([xpoi,theta0],axis=0))
+bayesassign = tf.assign(xvar, tf.concat([xpoi,theta+tf.random_normal(shape=theta.shape,dtype=dtype)],axis=0))
 if options.binByBinStat:
   bayesassignbeta = tf.assign(betagen, tf.random_gamma(shape=[],alpha=kstat+1.,beta=kstat,dtype=tf.as_dtype(dtype)))
 
@@ -912,10 +1123,13 @@ def minimize():
     sess.run(opinit)
     ifit = 0
     while True:
+    #for iiter in range(3000):
       isconverged,_ = sess.run(opmin)
       if options.fitverbose > 2:
-        lval, gmagval, e0val, trval = sess.run([tfminimizer.loss_old, tfminimizer.grad_old_mag, tfminimizer.e0, tfminimizer.trustradius])
-        print('Iteration %d, loss = %.6f, |g| = %e, lowest eigenvalue = %e, trustradius = %e' % (ifit,lval,gmagval,e0val,trval))
+        #lval, gmagval, e0val, trval = sess.run([tfminimizer.loss_old, tfminimizer.grad_old_mag, tfminimizer.e0, tfminimizer.trustradius])
+        #print('Iteration %d, loss = %.6f, |g| = %e, lowest eigenvalue = %e, trustradius = %e' % (ifit,lval,gmagval,e0val,trval))
+        lval, trval = sess.run([tfminimizer.loss_old, tfminimizer.trustradius])
+        print('Iteration %d, loss = %.6f,, trustradius = %e' % (ifit,lval,trval))
       if isconverged:
         break
       
@@ -972,7 +1186,7 @@ for itoy in range(ntoys):
 
   #reset all variables
   sess.run(globalinit)
-  x.load(xv,sess)
+  xvar.load(xv,sess)
     
   dofit = True
   
@@ -1019,7 +1233,18 @@ for itoy in range(ntoys):
   #set likelihood offset
   sess.run(nexpnomassign)
   
+  #print("hessian vs tricky comparison:")
+  #hessval,hesstval = sess.run([hessian,hessiant])
+  #print("hessian:")
+  #print(hessval)
+  #print("hessiantricky:")
+  #print(hesstval)
+  #print("comparison done")
+  
   if options.doBenchmark:
+    
+    lval = sess.run([l])
+    
     neval = 10
     t0 = time.time()
     for i in range(neval):
@@ -1027,7 +1252,9 @@ for itoy in range(ntoys):
       lval = sess.run([l])
     t = time.time() - t0
     print("%d l evals in %f seconds, %f seconds per eval" % (neval,t,t/neval))
-        
+    
+    lval,gradval = sess.run([l,grad])
+    
     neval = 10
     t0 = time.time()
     for i in range(neval):
@@ -1036,12 +1263,43 @@ for itoy in range(ntoys):
     t = time.time() - t0
     print("%d l+grad evals in %f seconds, %f seconds per eval" % (neval,t,t/neval))
         
-    neval = 1
+    hessval = sess.run([hessian])
+    e0 = tf.linalg.eigvalsh(hessian)[0]
+    e0val = sess.run(e0)
+    print("e0 = %f" % e0val)
+        
+    neval = 5
     t0 = time.time()
     for i in range(neval):
+      print(i)
       hessval = sess.run([hessian])
     t = time.time() - t0
     print("%d hessian evals in %f seconds, %f seconds per eval" % (neval,t,t/max(1,neval)))
+    
+    ##rmat = tf.random_uniform(shape=hessian.shape,dtype=hessian.dtype)
+    #rmat = hessian
+    
+    #eigo = tf.linalg.eigvalsh(rmat)
+    #eigoval = sess.run([eigo])
+    
+    #neval = 10
+    #t0 = time.time()
+    #for i in range(neval):
+      #print(i)
+      #eigoval = sess.run([eigo])
+    #t = time.time() - t0
+    #print("%d eigenvalue evals in %f seconds, %f seconds per eval" % (neval,t,t/max(1,neval)))    
+    
+    #eig,eigv = tf.linalg.eigh(rmat)
+    #eigval,eigvval = sess.run([eig,eigv])
+    
+    #t0 = time.time()
+    #for i in range(neval):
+      #print(i)
+      #eigval,eigvval = sess.run([eig,eigv])
+    #t = time.time() - t0
+    #print("%d eigendecomposition evals in %f seconds, %f seconds per eval" % (neval,t,t/max(1,neval)))
+    
     
     exit()
   
@@ -1324,3 +1582,4 @@ for itoy in range(ntoys):
 
 f.Write()
 f.Close()
+

@@ -808,6 +808,9 @@ tree.Branch('ndofpartial',tndofpartial,'ndofpartial/I')
 ttaureg = array('d',[0.])
 tree.Branch('taureg',ttaureg,'taureg/D')
 
+toutchisqs = []
+toutndofs = []
+
 toutvalss = []
 touterrss = []
 toutminosupss = []
@@ -816,9 +819,17 @@ toutgenvalss = []
 #outnames = []
 #outidxs = {}
 for output,outputname in zip(outputs,outputnames):
-  #outname = ":".join(output.name.split(":")[:-1])
+  outname = ":".join(output.name.split(":")[:-1])
   #outnames.append(outname)
   #outidxs[outname] = iout
+  
+  toutchisq = array('f',[0.])
+  toutchisqs.append(toutchisq)
+  tree.Branch('%s_chisq' % outname, toutchisq, '%s_chisq/F' % outname)
+              
+  toutndof = array('i',[0])
+  toutndofs.append(toutndof)
+  tree.Branch('%s_ndof' % outname, toutndof, '%s_ndof/I' % outname)
   
   toutvals = []
   touterrs = []
@@ -1044,6 +1055,8 @@ for itoy in range(ntoys):
     
     exit()
   
+  outvalssprefit = sess.run(outputs)
+  
   if options.saveHists and not options.toys > 1:
     nobsval = sess.run(nobs)
     obsHist = ROOT.TH1D('obs','',nbins,-0.5, float(nbins)-0.5)
@@ -1089,11 +1102,13 @@ for itoy in range(ntoys):
   outminosdownss = []
   outminosupd = {}
   outminosdownd = {}
+  
+  outchisqs = []
 
   #list of hists to prevent garbage collection
   hists = []
 
-  for output, outputname, outvals,invhessoutval in zip(outputs, outputnames, outvalss,invhessoutvals):
+  for output, outputname, outvals,outvalsprefit,invhessoutval in zip(outputs, outputnames, outvalss,outvalssprefit,invhessoutvals):
     outname = ":".join(output.name.split(":")[:-1])
     outthetanames = outputname + systs.tolist()
     nout = len(outputname)
@@ -1120,6 +1135,15 @@ for itoy in range(ntoys):
     if errstatus==0:
       parameterErrors = np.sqrt(np.diag(invhessoutval))
       sigmasv = parameterErrors[:nout]
+      #compute chisq for outputs wrt prefit
+      deltaout = outvals-outvalsprefit
+      deltaoutcol = np.reshape(deltaout,[-1,1])
+      covdelta = invhessoutval[:nout,:nout]
+      chisq = np.matmul(np.transpose(deltaoutcol),np.linalg.solve(covdelta,deltaoutcol))
+      print("Chisq:")
+      print([outname,nout,chisq])
+      outchisqs.append(chisq)
+      
       if not options.toys > 0:
         variances2D     = parameterErrors[np.newaxis].T * parameterErrors
         correlationMatrix = np.divide(invhessoutval, variances2D)
@@ -1127,7 +1151,8 @@ for itoy in range(ntoys):
         array2hist(invhessoutval, covarianceHist)
     else:
       sigmasv = -99.*np.ones_like(outvals)
-    
+      outchsqs.append(-99.)
+          
     minoserrsup = -99.*np.ones_like(sigmasv)
     minoserrsdown = -99.*np.ones_like(sigmasv)
     
@@ -1243,6 +1268,11 @@ for itoy in range(ntoys):
       toutgenval[0] = outgenval
       if itoy==0:
         print('%s = %e +- %f (+%f -%f)' % (name,outval,outma,minosup,minosdown))
+
+  for output,outputname,outchisq,toutchisq,toutndof in zip(outputs,outputnames,outchisqs,toutchisqs,toutndofs):
+    nout = len(outputname)
+    toutchisq[0] = outchisq
+    toutndof[0] = nout
 
   for syst,thetaval,theta0val,sigma,minosup,minosdown,thetagenval, tthetaval,ttheta0val,tthetaerr,tthetaminosup,tthetaminosdown,tthetagenval in zip(systs,thetavals,theta0vals,thetasigmasv,thetaminosups,thetaminosdowns,thetavalsgen, tthetavals,ttheta0vals,tthetaerrs,tthetaminosups,tthetaminosdowns,tthetagenvals):
     tthetaval[0] = thetaval

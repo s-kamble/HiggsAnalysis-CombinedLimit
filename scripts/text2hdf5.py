@@ -52,15 +52,24 @@ if len(args) == 0:
     exit(1)
 
 options.fileName = args[0]
-if options.fileName.endswith(".gz"):
-    import gzip
-    file = gzip.open(options.fileName, "rb")
-    options.fileName = options.fileName[:-3]
-else:
-    file = open(options.fileName, "r")
 
-## Parse text file 
-DC = parseCard(file, options)
+
+if not options.fileName.endswith(".pkl"):
+    
+    if options.fileName.endswith(".gz"):
+        import gzip
+        file = gzip.open(options.fileName, "rb")
+        options.fileName = options.fileName[:-3]
+    else:
+        file = open(options.fileName, "r")
+    ## Parse text file 
+    DC = parseCard(file, options)
+
+else:
+    
+    file = open(options.fileName, "rb")
+    import pickle
+    DC = pickle.load(file)
 
 if options.dumpCard:
     DC.print_structure()
@@ -145,7 +154,19 @@ for group in DC.polGroups:
   for proc in DC.polGroups[group]:
     polgroupidx.append(procs.index(proc))
   polgroupidxs.append(polgroupidx)
-  
+
+
+#list of groups of signal processes by helicity xsec
+#helgroups = []
+#helgroupidxs = []
+#for group in DC.helGroups:
+  #helgroups.append(group)
+  #helgroupidx = []
+  #for proc in DC.helGroups[group]:
+    #helgroupidx.append(procs.index(proc))
+  #helgroupidxs.append(helgroupidx)
+
+
 #list of groups of signal processes to be summed
 sumgroups = []
 sumgroupsegmentids = []
@@ -216,6 +237,7 @@ for chan in chans:
   if chan in options.maskedChan:
     nbinschan = 1
   else:
+    print chan, "looking at this channel"
     data_obs_chan_hist = MB.getShape(chan,"data_obs")
     #exclude overflow/underflow bins
     nbinschan = data_obs_chan_hist.GetSize() - 2
@@ -610,6 +632,12 @@ hpolgroups[...] = polgroups
 
 hpolgroupidxs = f.create_dataset("hpolgroupidxs", [len(polgroups),3], dtype='int32', compression="gzip")
 hpolgroupidxs[...] = polgroupidxs
+
+#hhelgroups = f.create_dataset("hhelgroups", [len(helgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+#hhelgroups[...] = helgroups
+
+#hellgroupidxs = f.create_dataset("hellgroupidxs", [len(helgroups),9], dtype='int32', compression="gzip")
+#hellgroupidxs[...] = helgroupidxs
 
 hsumgroups = f.create_dataset("hsumgroups", [len(sumgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
 hsumgroups[...] = sumgroups

@@ -54,7 +54,7 @@ parser.add_option("","--scanPoints", default=16, type=int, help="default number 
 parser.add_option("","--scanRange", default=3., type=float, help="default scan range in terms of hessian uncertainty")
 parser.add_option("","--nThreads", default=-1., type=int, help="set number of threads (default is -1: use all available cores)")
 parser.add_option("","--POIMode", default="mu",type="string", help="mode for POI's")
-parser.add_option("","--nonNegativePOI", default=True, action='store_true', help="force signal strengths to be non-negative")
+parser.add_option("","--allowNegativePOI", default=False, action='store_true', help="allow signal strengths to be negative (otherwise constrained to be non-negative)")
 parser.add_option("","--POIDefault", default=1., type=float, help="mode for POI's")
 parser.add_option("","--doBenchmark", default=False, action='store_true', help="run benchmarks")
 parser.add_option("","--saveHists", default=False, action='store_true', help="save prefit and postfit histograms")
@@ -152,10 +152,10 @@ else:
   norm = maketensor(hnorm)
   logk = maketensor(hlogk)
 
-if options.nonNegativePOI:
-  boundmode = 1
-else:
+if options.allowNegativePOI:
   boundmode = 0
+else:
+  boundmode = 1
 
 pois = []  
   
@@ -237,14 +237,11 @@ if sparse:
   #other dimensions due to the ordering of the tensor,
   #after this the result should be relatively small in any case and  further
   #manipulations can be done more efficiently after converting to dense
-  snormnormmasked0_sparse = simple_sparse_slice0begin(snormnorm_sparse, nbins, doCache=True)
-  snormnormmasked0 = simple_sparse_to_dense(snormnormmasked0_sparse)
-  snormnormmasked = snormnormmasked0[:,:nsignals]
+  snormnormmasked_sparse = simple_sparse_slice0begin(snormnorm_sparse, nbins, doCache=True)
+  snormnormmasked = simple_sparse_to_dense(snormnormmasked_sparse)
   
-  normmasked0_sparse = simple_sparse_slice0begin(norm_sparse, nbins, doCache=True)
-  normmasked0 = simple_sparse_to_dense(normmasked0_sparse)
-  normmasked = normmasked0[:,:nsignals]
-  
+  normmasked_sparse = simple_sparse_slice0begin(norm_sparse, nbins, doCache=True)
+  normmasked = simple_sparse_to_dense(normmasked_sparse)  
   
   #TODO consider doing this one column at a time to save memory
   if options.saveHists:
@@ -278,14 +275,14 @@ else:
   nexpfullcentral = tf.matmul(snormnorm, mrnorm)
   nexpfullcentral = tf.squeeze(nexpfullcentral,-1)
 
-  snormnormmasked = snormnorm[nbins:,:nsignals]
+  snormnormmasked = snormnorm[nbins:]
   
-  normmasked = norm[nbins:,:nsignals]
+  normmasked = norm[nbins:]
   
   if options.saveHists:
     normfullcentral = ernorm*snormnorm
     
-pmaskedexp = r*tf.reduce_sum(snormnormmasked,axis=0)
+pmaskedexp = rnorm*tf.reduce_sum(snormnormmasked,axis=0)
 
 maskedexp = nexpfullcentral[nbins:]
 
@@ -317,12 +314,13 @@ if options.binByBinStat:
       slogbeta = tf.matmul(norm,logbetafull,transpose_a=True)
     
     slogbeta = tf.reshape(slogbeta,[-1])
-    slogbetasig = slogbeta[:nsignals]/sumnormmasked
+    sumnormmaskednull = tf.equal(sumnormmasked,0.)
+    slogbeta = tf.where(sumnormmaskednull,tf.zeros_like(slogbeta),slogbeta)*tf.reciprocal(tf.where(sumnormmaskednull,tf.ones_like(sumnormmasked),sumnormmasked))
     
-    expslogbetasig = tf.exp(slogbetasig)
+    expslogbeta = tf.exp(slogbeta)
     
-    pmaskedexp *= expslogbetasig
-    snormnormmasked *= tf.reshape(expslogbetasig,[1,-1])
+    pmaskedexp *= expslogbeta
+    snormnormmasked *= tf.reshape(expslogbeta,[1,-1])
     
     
   if options.saveHists:
@@ -343,10 +341,10 @@ else:
 mmaskedexpr = tf.expand_dims(tf.reciprocal(maskedexp),0)
 pmaskedexpnorm = tf.matmul(mmaskedexpr,snormnormmasked)
 pmaskedexpnorm = tf.squeeze(pmaskedexpnorm,0)
-pmaskedexpnorm = r*pmaskedexpnorm
+pmaskedexpnorm = rnorm*pmaskedexpnorm
 
-  
-
+pmaskedexpsig = pmaskedexp[:nsignals]
+pmaskedexpnormsig = pmaskedexpnorm[:nsignals]
   
 if options.saveHists:
   nexpsigcentral = tf.reduce_sum(normfullcentral[:,:nsignals],axis=-1)
@@ -393,8 +391,8 @@ if options.binByBinStat:
  
 #name outputs
 poi = tf.identity(poi, name=options.POIMode)
-pmaskedexp = tf.identity(pmaskedexp, "pmaskedexp")
-pmaskedexpnorm = tf.identity(pmaskedexpnorm, "pmaskedexpnorm")
+pmaskedexpsig = tf.identity(pmaskedexpsig, "pmaskedexp")
+pmaskedexpnormsig = tf.identity(pmaskedexpnormsig, "pmaskedexpnorm")
  
 outputs = []
 outputnames = []
@@ -407,10 +405,12 @@ if options.POIMode == "mu":
     outputname.append("%s_%s" % (signal,options.POIMode))
 outputnames.append(outputname)
   
+taureg = -1.
+  
 if options.POIMode == "mu":  
   if nbinsmasked>0:
-    outputs.append(pmaskedexp)
-    outputs.append(pmaskedexpnorm)
+    outputs.append(pmaskedexpsig)
+    outputs.append(pmaskedexpnormsig)
     
     outputname = []
     for signal in signals:
@@ -523,7 +523,6 @@ if options.POIMode == "mu":
       outputnames.append(outputname)
 
   #regularization
-  taureg = -1.
   if options.doRegularization and nreggroups > 0:
     if options.regularizationUseExpected:
       regsource = poi
@@ -710,7 +709,7 @@ if options.useSciPyMinimizer:
   scipyminimizer = ScipyTROptimizerInterface(l, var_list = [x], var_to_bounds={x: (lb,ub)}, options={'verbose': options.fitverbose, 'maxiter' : 100000, 'gtol' : 0., 'xtol' : xtol, 'barrier_tol' : btol})
 else:
   tfminimizer = SR1TrustExact(l,x,grad)
-  opinit = tfminimizer.initialize(l,x,grad,hessian)
+  opinit = tfminimizer.initialize(l,x,grad)
   opmin = tfminimizer.minimize(l,x,grad)
 
 outidxmap = {}
@@ -809,6 +808,9 @@ tree.Branch('ndofpartial',tndofpartial,'ndofpartial/I')
 ttaureg = array('d',[0.])
 tree.Branch('taureg',ttaureg,'taureg/D')
 
+toutchisqs = []
+toutndofs = []
+
 toutvalss = []
 touterrss = []
 toutminosupss = []
@@ -817,9 +819,17 @@ toutgenvalss = []
 #outnames = []
 #outidxs = {}
 for output,outputname in zip(outputs,outputnames):
-  #outname = ":".join(output.name.split(":")[:-1])
+  outname = ":".join(output.name.split(":")[:-1])
   #outnames.append(outname)
   #outidxs[outname] = iout
+  
+  toutchisq = array('f',[0.])
+  toutchisqs.append(toutchisq)
+  tree.Branch('%s_chisq' % outname, toutchisq, '%s_chisq/F' % outname)
+              
+  toutndof = array('i',[0])
+  toutndofs.append(toutndof)
+  tree.Branch('%s_ndof' % outname, toutndof, '%s_ndof/I' % outname)
   
   toutvals = []
   touterrs = []
@@ -1045,6 +1055,8 @@ for itoy in range(ntoys):
     
     exit()
   
+  outvalssprefit = sess.run(outputs)
+  
   if options.saveHists and not options.toys > 1:
     nobsval = sess.run(nobs)
     obsHist = ROOT.TH1D('obs','',nbins,-0.5, float(nbins)-0.5)
@@ -1090,11 +1102,13 @@ for itoy in range(ntoys):
   outminosdownss = []
   outminosupd = {}
   outminosdownd = {}
+  
+  outchisqs = []
 
   #list of hists to prevent garbage collection
   hists = []
 
-  for output, outputname, outvals,invhessoutval in zip(outputs, outputnames, outvalss,invhessoutvals):
+  for output, outputname, outvals,outvalsprefit,invhessoutval in zip(outputs, outputnames, outvalss,outvalssprefit,invhessoutvals):
     outname = ":".join(output.name.split(":")[:-1])
     outthetanames = outputname + systs.tolist()
     nout = len(outputname)
@@ -1121,6 +1135,15 @@ for itoy in range(ntoys):
     if errstatus==0:
       parameterErrors = np.sqrt(np.diag(invhessoutval))
       sigmasv = parameterErrors[:nout]
+      #compute chisq for outputs wrt prefit
+      deltaout = outvals-outvalsprefit
+      deltaoutcol = np.reshape(deltaout,[-1,1])
+      covdelta = invhessoutval[:nout,:nout]
+      chisq = np.matmul(np.transpose(deltaoutcol),np.linalg.solve(covdelta,deltaoutcol))
+      print("Chisq:")
+      print([outname,nout,chisq])
+      outchisqs.append(chisq)
+      
       if not options.toys > 0:
         variances2D     = parameterErrors[np.newaxis].T * parameterErrors
         correlationMatrix = np.divide(invhessoutval, variances2D)
@@ -1128,7 +1151,8 @@ for itoy in range(ntoys):
         array2hist(invhessoutval, covarianceHist)
     else:
       sigmasv = -99.*np.ones_like(outvals)
-    
+      outchsqs.append(-99.)
+          
     minoserrsup = -99.*np.ones_like(sigmasv)
     minoserrsdown = -99.*np.ones_like(sigmasv)
     
@@ -1244,6 +1268,11 @@ for itoy in range(ntoys):
       toutgenval[0] = outgenval
       if itoy==0:
         print('%s = %e +- %f (+%f -%f)' % (name,outval,outma,minosup,minosdown))
+
+  for output,outputname,outchisq,toutchisq,toutndof in zip(outputs,outputnames,outchisqs,toutchisqs,toutndofs):
+    nout = len(outputname)
+    toutchisq[0] = outchisq
+    toutndof[0] = nout
 
   for syst,thetaval,theta0val,sigma,minosup,minosdown,thetagenval, tthetaval,ttheta0val,tthetaerr,tthetaminosup,tthetaminosdown,tthetagenval in zip(systs,thetavals,theta0vals,thetasigmasv,thetaminosups,thetaminosdowns,thetavalsgen, tthetavals,ttheta0vals,tthetaerrs,tthetaminosups,tthetaminosdowns,tthetagenvals):
     tthetaval[0] = thetaval

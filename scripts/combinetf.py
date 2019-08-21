@@ -37,6 +37,10 @@ from array import array
 
 from HiggsAnalysis.CombinedLimit.tfscipyhess import ScipyTROptimizerInterface,jacobian,sum_loop
 
+from scipy.optimize import SR1
+from scipy.optimize import minimize as scipyminimize
+import matplotlib.pyplot as plt
+
 parser = OptionParser(usage="usage: %prog [options] datacard.txt -o output \nrun with --help to get list of options")
 parser.add_option("-o","--output", default=None, type="string", help="output file name")
 parser.add_option("-t","--toys", default=0, type=int, help="run a given number of toys, 0 fits the data (default), and -1 fits the asimov toy")
@@ -763,7 +767,7 @@ if options.binByBinStat:
   bayesassignbeta = tf.assign(betagen, tf.random_gamma(shape=[],alpha=kstat+1.,beta=kstat,dtype=tf.as_dtype(dtype)))
 
 #initialize output tree
-f = ROOT.TFile(options.output if options.output else 'fitresults_%i.root' % seed, 'recreate' )
+fout = ROOT.TFile(options.output if options.output else 'fitresults_%i.root' % seed, 'recreate' )
 tree = ROOT.TTree("fitresults", "fitresults")
 
 tseed = array('i', [seed])
@@ -807,6 +811,24 @@ tree.Branch('ndofpartial',tndofpartial,'ndofpartial/I')
 
 ttaureg = array('d',[0.])
 tree.Branch('taureg',ttaureg,'taureg/D')
+
+maxorder = 5
+tsmoothchisqs = []
+tsmoothndofs = []
+tsmoothstatuses = []
+
+for n in range(maxorder+1):
+  tsmoothchisq = array('d',[0.])
+  tree.Branch('smoothchisq_%d' % n, tsmoothchisq, 'smoothchisq_%d/D' % n)
+  tsmoothchisqs.append(tsmoothchisq)
+
+  tsmoothndof = array('i',[0])
+  tree.Branch('smoothndof_%d' % n, tsmoothndof, 'smoothndof_%d/I' % n)
+  tsmoothndofs.append(tsmoothndof)
+
+  tsmoothstatus = array('i',[0])
+  tree.Branch('smoothstatus_%d' % n, tsmoothstatus, 'smoothstatus_%d/I' % n)
+  tsmoothstatuses.append(tsmoothstatus)
 
 toutchisqs = []
 toutndofs = []
@@ -887,6 +909,152 @@ for syst in systs:
   tree.Branch('%s_minosup' % systname, tthetaminosup, '%s_minosup/F' % systname)
   tree.Branch('%s_minosdown' % systname, tthetaminosdown, '%s_minosdown/F' % systname)
   tree.Branch('%s_gen' % systname, tthetagenval, '%s_gen/F' % systname)
+
+#initialize h5py output
+h5fout = h5py_cache.File('fitresults_%i.hdf5' % seed, chunk_cache_mem_size=cacheSize, mode='w')
+
+#copy some info to output file
+f.copy('hreggroups',h5fout)
+f.copy('hreggroupidxs',h5fout)
+
+outnames = []
+for output,outputname in zip(outputs,outputnames):
+  outname = ":".join(output.name.split(":")[:-1])
+  outnames.append(outname)
+  hnames = h5fout.create_dataset("%s_names" % outname, [len(outputname)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+  hnames[...] = outputname
+
+houtnames = h5fout.create_dataset("outnames", [len(outnames)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+houtnames[...] = outnames
+
+#smoothness test
+def dosmoothnessfit(n=0,lregouts=None,flatregcov=None,lidxs=None,outcov=None,doplotting=False):
+  nregs = len(lregouts)
+  nparms = (n+1)
+  nparmsfull = nregs*nparms
+  print(nparms)
+  
+  nbinsfull = 0
+  for regout in lregouts:
+    nbinsfull += len(regout)
+
+  
+  xvals = np.array([0.125, 0.375, 0.625, 0.875, 1.125, 1.375, 1.625, 1.875, 2.125, 2.375],dtype='float64')
+  #xvals = xvals[:maxbins]
+  
+  p0 = np.zeros([nparmsfull],dtype='float64')
+  
+  for ireg,regout in enumerate(lregouts):
+    p0[ireg*nparms] = np.mean(regout)
+  
+  def fs(ireg,xs,p):
+    pi = p[ireg*nparms:(ireg+1)*nparms]
+    fvals = np.zeros_like(xs)
+    for j,pj in enumerate(pi):
+      fvals += pj*np.power(xs,j)
+    return fvals
+  
+  def chisqloss(p,doplots=False):
+    deltas = []
+      
+    
+    jacdelta = np.zeros([nparmsfull,nbinsfull],dtype='float64')
+    ibin = 0
+    for ireg,regout in enumerate(lregouts):
+      nbins = len(regout)
+      #pi = p[ireg*nparms:(ireg+1)*nparms]
+      #fvals = np.zeros_like(xvals)
+      #for j,pj in enumerate(pi):
+      ixvals = xvals[:nbins]
+        #fvals += pj*np.power(xvals,j)
+      fvals = fs(ireg,ixvals,p)
+      
+      pi = p[ireg*nparms:(ireg+1)*nparms]
+      for j,pj in enumerate(pi):
+        jacdelta[ireg*nparms + j,ibin:ibin+nbins] = np.power(ixvals,j)
+      
+      #delta = regout - fvals
+      delta = fvals - regout
+      #print("delta test:")
+      #print(regout)
+      #print(fvals)
+      #print(delta)
+      deltas.append(delta)
+      
+      ibin += nbins
+      
+      if doplots:
+        xfine = np.linspace(0.,2.5,100)
+        fvalsfine = fs(ireg,xfine,p)
+        #errs = np.sqrt(np.diag(flatregcov))[ireg*nbins:(ireg+1)*nbins]
+        errs = np.sqrt(np.diag(outcov))[lidxs[ireg]]
+        
+        xerrs = 0.125*np.ones_like(regout)
+        
+        plt.figure()
+        #sreg = plt.scatter(xvals,regout)
+        sreg = plt.errorbar(ixvals,regout,yerr=errs,xerr=xerrs,fmt='.')
+        #sreg = plt.errorbar(ixvals,regout,xerr=xerrs,fmt='.')
+        sfunc = plt.plot(xfine,fvalsfine)
+        plt.ylim(bottom=0.)
+        
+      
+    delta = np.concatenate(deltas,axis=0)
+    deltacol = np.reshape(delta,[-1,1])
+    deltainvcov = np.linalg.solve(flatregcov,deltacol)
+    chisq = np.matmul(np.transpose(deltacol),deltainvcov)
+    chisq = np.reshape(chisq,[])
+    
+    ###print("jacdelta:")
+    #print(jacdelta)
+    
+    chisqgrad = 2.*np.matmul(jacdelta,deltainvcov)
+    #print("chisqgradshape")
+    #print(chisqgrad.shape)
+    
+    chisqgrad = np.reshape(chisqgrad,[-1])
+    
+    #grad = np.reshape(2.*deltainvcov,[-1])
+    
+    return (chisq,chisqgrad)
+      
+  print(chisqloss(p0))
+        
+  xtol = np.finfo('float64').eps
+  
+  #res = scipyminimize(chisqloss,p0,method='trust-constr',options={'disp': True, 'maxiter': int(1e6), 'gtol' : 0., 'xtol' : xtol},jac=False,hess=SR1(),)
+  #res = scipyminimize(chisqloss,p0,method='trust-constr',options={'disp': True, 'maxiter': int(20e3)},jac=False,hess=SR1(),)
+  
+  #res = scipyminimize(chisqloss,p0,method='trust-constr',options={'disp': True, 'maxiter': int(20e3)},jac=True,hess=SR1(),)
+  res = scipyminimize(chisqloss,p0,method='trust-constr',options={'disp': True, 'maxiter': int(20e3), 'gtol' : 0., 'xtol' : xtol},jac=True,hess=SR1(),)
+  xres = res.x
+  status = res.status
+  #print(xres)
+  #print("status:")
+  #print(res.status)
+  
+  chisq,chisqgrad = chisqloss(xres,doplots=doplotting)
+  print("Chisq:")
+  print(chisq)
+  print(chisqgrad)
+  
+  nvals = flatregcov.shape[0]
+  ndof = nvals - nparmsfull
+  #ndof = len(flatregvals) - nparmsfull
+  
+  chisqndof = chisq/float(ndof)
+  
+  print('ndof = %d' % ndof)
+  print("chisq/ndof = %f" % chisqndof)
+  
+  prob = ROOT.TMath.Prob(chisq,ndof)
+  print("prob = %f" % prob)
+  #print(res.status)
+  #print(res.x)
+  
+  return (chisq,ndof,status)
+                         
+
 
 ntoys = options.toys
 if ntoys <= 0:
@@ -1105,6 +1273,10 @@ for itoy in range(ntoys):
   
   outchisqs = []
 
+  rtchisqs = []
+  rtndofs = []
+  rtstatuses = []
+
   #list of hists to prevent garbage collection
   hists = []
 
@@ -1114,7 +1286,40 @@ for itoy in range(ntoys):
     nout = len(outputname)
     nparmsout = len(outthetanames)
 
-    if not options.toys > 0:
+    if outname=="pmaskedexp":
+      doSmoothnessTest = True
+      doplotting=False
+      if doSmoothnessTest and errstatus==0:
+        #set up smooth function test based on regularization groups
+        rtlidxs = []
+        rtlregouts = []
+        rtoutvals = pmaskedexp
+        for iidxs,idxs in enumerate(reggroupidxs):
+          rtlidxs.append(idxs)
+          rtlregouts.append(outvals[idxs])
+          
+        rtflatidxs = np.concatenate(rtlidxs,axis=0)
+        rtflatregvals = outvals[rtflatidxs]
+        rtflatregcov = invhessoutval
+        rtflatregcov = rtflatregcov[rtflatidxs,:]
+        rtflatregcov = rtflatregcov[:,rtflatidxs]
+        
+        for n in range(maxorder+1):
+          rtchisq, rtndof, rtstatus = dosmoothnessfit(n,rtlregouts,rtflatregcov,rtlidxs,outcov=invhessoutval,doplotting=doplotting)
+          rtchisqs.append(rtchisq)
+          rtndofs.append(rtndof)
+          rtstatuses.append(rtstatus)
+        
+        if doplotting:
+          plt.show()
+          input("wait for input:")
+      else:
+        for n in range(maxorder+1):
+          rtchisqs.append(-99.)
+          rtndofs.append(-99)
+          rtstatuses.append(-99)
+
+    if not options.toys > 1:
       dName = 'asimov' if options.toys < 0 else 'data fit'
       correlationHist = ROOT.TH2D('correlation_matrix_channel'+outname, 'correlation matrix for '+dName+' in channel'+outname, nparmsout, 0., 1., nparmsout, 0., 1.)
       covarianceHist  = ROOT.TH2D('covariance_matrix_channel' +outname, 'covariance matrix for ' +dName+' in channel'+outname, nparmsout, 0., 1., nparmsout, 0., 1.)
@@ -1131,6 +1336,13 @@ for itoy in range(ntoys):
         correlationHist.GetYaxis().SetBinLabel(ip1+1, '%s' % p1)
         covarianceHist.GetXaxis().SetBinLabel(ip1+1, '%s' % p1)
         covarianceHist.GetYaxis().SetBinLabel(ip1+1, '%s' % p1)
+        
+      
+      houtvals = h5fout.create_dataset("%s_outvals" % outname, outvals.shape, dtype=outvals.dtype, compression="gzip")
+      houtvals[...] = outvals
+      
+      houtcov = h5fout.create_dataset("%s_outcov" % outname, invhessoutval.shape, dtype=invhessoutval.dtype, compression="gzip")
+      houtcov[...] = invhessoutval
 
     if errstatus==0:
       parameterErrors = np.sqrt(np.diag(invhessoutval))
@@ -1139,7 +1351,10 @@ for itoy in range(ntoys):
       deltaout = outvals-outvalsprefit
       deltaoutcol = np.reshape(deltaout,[-1,1])
       covdelta = invhessoutval[:nout,:nout]
-      chisq = np.matmul(np.transpose(deltaoutcol),np.linalg.solve(covdelta,deltaoutcol))
+      try:
+        chisq = np.matmul(np.transpose(deltaoutcol),np.linalg.solve(covdelta,deltaoutcol))
+      except:
+        chisq = -99.
       print("Chisq:")
       print([outname,nout,chisq])
       outchisqs.append(chisq)
@@ -1284,6 +1499,11 @@ for itoy in range(ntoys):
     if itoy==0:
       print('%s = %f +- %f (+%f -%f) (%s_In = %f)' % (syst, thetaval, sigma, minosup,minosdown,syst,theta0val))
     
+  for rtchisq,rtndof,rtstatus,tsmoothchisq,tsmoothndof,tsmoothstatus in zip(rtchisqs,rtndofs,rtstatuses,tsmoothchisqs,tsmoothndofs,tsmoothstatuses):
+    tsmoothchisq[0] = rtchisq
+    tsmoothndof[0] = rtndof
+    tsmoothstatus[0] = rtstatus
+    
   tree.Fill()
   
   for var in options.scan:
@@ -1351,5 +1571,5 @@ for itoy in range(ntoys):
         tree.Fill()
 
 
-f.Write()
-f.Close()
+fout.Write()
+fout.Close()

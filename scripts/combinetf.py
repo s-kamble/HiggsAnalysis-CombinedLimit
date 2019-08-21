@@ -1319,7 +1319,7 @@ for itoy in range(ntoys):
           rtndofs.append(-99)
           rtstatuses.append(-99)
 
-    if not options.toys > 1:
+    if not options.toys > 0:
       dName = 'asimov' if options.toys < 0 else 'data fit'
       correlationHist = ROOT.TH2D('correlation_matrix_channel'+outname, 'correlation matrix for '+dName+' in channel'+outname, nparmsout, 0., 1., nparmsout, 0., 1.)
       covarianceHist  = ROOT.TH2D('covariance_matrix_channel' +outname, 'covariance matrix for ' +dName+' in channel'+outname, nparmsout, 0., 1., nparmsout, 0., 1.)

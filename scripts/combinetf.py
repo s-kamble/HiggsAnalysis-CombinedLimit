@@ -56,6 +56,7 @@ parser.add_option("","--minos", default=[], type="string", action="append", help
 parser.add_option("","--scan", default=[], type="string", action="append", help="run likelihood scan on the specified variables")
 parser.add_option("","--scanPoints", default=16, type=int, help="default number of points for likelihood scan")
 parser.add_option("","--scanRange", default=3., type=float, help="default scan range in terms of hessian uncertainty")
+parser.add_option("","--scanRangeUsePrefit", default=False, action='store_true', help="use prefit uncertainty to define scan range")
 parser.add_option("","--nThreads", default=-1., type=int, help="set number of threads (default is -1: use all available cores)")
 parser.add_option("","--POIMode", default="mu",type="string", help="mode for POI's")
 parser.add_option("","--allowNegativePOI", default=False, action='store_true', help="allow signal strengths to be negative (otherwise constrained to be non-negative)")
@@ -295,6 +296,14 @@ nexpcentral = nexpfullcentral[:nbins]
 if options.binByBinStat:
   #beta = (nobs + kstat - 1.)/(nexpcentral+kstat)
   beta = (nobs + kstat)/(nexpcentral+kstat)
+  #beta = -2.*nobs/(-nexpcentral*(1.-kstat) + tf.sqrt(tf.square(nexpcentral*(1.-kstat)) + 4.*kstat*nexpcentral*nobs))
+  #beta = (nexpcentral*(kstat-1.) + tf.sqrt(tf.square(nexpcentral*(kstat-1.)) + 4.*kstat*nobs))/(2.*kstat)
+  
+  #betab = nexpcentral - kstat
+  #beta = 0.5*(-betab + tf.sqrt(betab*betab + 4.*kstat*nobs))/kstat
+  #betaalt = -2.*nobs/(-betab - tf.sqrt(betab*betab + 4.*kstat*nobs))
+  #beta = tf.where(tf.greater(betab,0.),betaalt,beta)
+  
   betagen = tf.Variable(tf.ones([nbins],dtype=dtype),name="betagen")
   #beta = tf.Print(beta,[beta],message="beta",summarize=10000)
   nexp = beta*nexpcentral
@@ -382,13 +391,15 @@ l = ln + lc
 lfull = lnfull + lc
 
 if options.binByBinStat:
-  #lbetav = -(kstat-1.)*tf.log(beta) + kstat*beta
+  #lbetavfull = -(kstat-1.)*tf.log(beta) + kstat*beta
   lbetavfull = -kstat*tf.log(beta) + kstat*beta
   #lbetavfull = tf.where(nobsnull,tf.zeros_like(lbetavfull),lbetavfull)
+  #lbetavfull = 0.5*kstat*tf.square(beta-1.)
   lbetafull = tf.reduce_sum(lbetavfull)
   
   lbetav = lbetavfull - kstat
   lbeta = tf.reduce_sum(lbetav)
+  #lbeta = lbetafull
   
   l = l + lbeta
   lfull = lfull + lbetafull
@@ -563,8 +574,10 @@ nthreadshess = min(nthreadshess,nparms)
 grad = tf.gradients(l,x,gate_gradients=True)[0]  
 hessian = jacobian(grad,x,gate_gradients=True,parallel_iterations=nthreadshess,back_prop=False)
 
-eigvals = tf.self_adjoint_eigvals(hessian)
+#eigvals = tf.self_adjoint_eigvals(hessian)
+eigvals,eigvects = tf.self_adjoint_eig(hessian)
 mineigv = tf.reduce_min(eigvals)
+UT = tf.transpose(eigvects)
 isposdef = mineigv > 0.
 invhessian = tf.matrix_inverse(hessian)
 gradcol = tf.reshape(grad,[-1,1])
@@ -910,22 +923,25 @@ for syst in systs:
   tree.Branch('%s_minosdown' % systname, tthetaminosdown, '%s_minosdown/F' % systname)
   tree.Branch('%s_gen' % systname, tthetagenval, '%s_gen/F' % systname)
 
-#initialize h5py output
-h5fout = h5py_cache.File('fitresults_%i.hdf5' % seed, chunk_cache_mem_size=cacheSize, mode='w')
+doh5output = False
 
-#copy some info to output file
-f.copy('hreggroups',h5fout)
-f.copy('hreggroupidxs',h5fout)
+if doh5output:
+  #initialize h5py output
+  h5fout = h5py_cache.File('fitresults_%i.hdf5' % seed, chunk_cache_mem_size=cacheSize, mode='w')
 
-outnames = []
-for output,outputname in zip(outputs,outputnames):
-  outname = ":".join(output.name.split(":")[:-1])
-  outnames.append(outname)
-  hnames = h5fout.create_dataset("%s_names" % outname, [len(outputname)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-  hnames[...] = outputname
+  #copy some info to output file
+  f.copy('hreggroups',h5fout)
+  f.copy('hreggroupidxs',h5fout)
 
-houtnames = h5fout.create_dataset("outnames", [len(outnames)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-houtnames[...] = outnames
+  outnames = []
+  for output,outputname in zip(outputs,outputnames):
+    outname = ":".join(output.name.split(":")[:-1])
+    outnames.append(outname)
+    hnames = h5fout.create_dataset("%s_names" % outname, [len(outputname)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+    hnames[...] = outputname
+
+  houtnames = h5fout.create_dataset("outnames", [len(outnames)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+  houtnames[...] = outnames
 
 #smoothness test
 def dosmoothnessfit(n=0,lregouts=None,flatregcov=None,lidxs=None,outcov=None,doplotting=False):
@@ -1083,11 +1099,14 @@ outvalsgens,thetavalsgen = sess.run([outputs,theta])
 
 #all caches should be filled by now
 
-def minimize():
+def minimize(evs=None,UTval=None):
   if options.useSciPyMinimizer:
     scipyminimizer.minimize(sess)
   else:
     sess.run(opinit)
+    if evs is not None:
+      tfminimizer.e.load(evs,sess)
+      tfminimizer.UT.load(UTval,sess)
     ifit = 0
     while True:
       isconverged,_ = sess.run(opmin)
@@ -1232,29 +1251,40 @@ for itoy in range(ntoys):
     
     prefithists = fillHists('prefit')
   
-  if dofit:
-    minimize()
-
-  #get fit output
-  xval, outvalss, thetavals, theta0vals, nllval, nllvalfull = sess.run([x,outputs,theta,theta0,l,lfull])
-  dnllval = 0.
-  #get inverse hessians for error calculation (can fail if matrix is not invertible)
-  try:
-    invhessval,mineigval,isposdefval,edmval,invhessoutvals = sess.run([invhessian,mineigv,isposdef,edm,invhessianouts])
-    errstatus = 0
-  except:
-    edmval = -99.
-    isposdefval = False
-    mineigval = -99.
-    invhessoutvals = outvalss
-    errstatus = 1
-    
-  if isposdefval and edmval > -edmtol:
-    status = 0
-  else:
-    status = 1
+  evs = None
+  UTval = None
   
-  print("status = %i, errstatus = %i, nllval = %f, nllvalfull = %f, edmval = %e, mineigval = %e" % (status,errstatus,nllval,nllvalfull,edmval,mineigval))  
+  for ifit in range(2):
+    if dofit:
+      minimize(evs,UTval)
+      
+    #get fit output
+    xval, outvalss, thetavals, theta0vals, nllval, nllvalfull = sess.run([x,outputs,theta,theta0,l,lfull])
+    dnllval = 0.
+    #get inverse hessians for error calculation (can fail if matrix is not invertible)
+    try:
+      #invhessval,mineigval,isposdefval,edmval,invhessoutvals = sess.run([invhessian,mineigv,isposdef,edm,invhessianouts])
+      invhessval,mineigval,isposdefval,edmval,invhessoutvals,evs,UTval = sess.run([invhessian,mineigv,isposdef,edm,invhessianouts,eigvals,UT])
+      errstatus = 0
+    except:
+      edmval = -99.
+      isposdefval = False
+      mineigval = -99.
+      invhessoutvals = outvalss
+      errstatus = 1
+      evs = None
+      UTval = None
+      
+    if isposdefval and edmval > -edmtol:
+      status = 0
+    else:
+      status = 1
+    
+    print("status = %i, errstatus = %i, nllval = %f, nllvalfull = %f, edmval = %e, mineigval = %e" % (status,errstatus,nllval,nllvalfull,edmval,mineigval))  
+    
+    edmtolretry = 1e-3
+    if isposdefval and edmval < edmtolretry and edmval>=0.:
+      break
   
   if errstatus==0:
     fullsigmasv = np.sqrt(np.diag(invhessval))
@@ -1287,7 +1317,7 @@ for itoy in range(ntoys):
     nparmsout = len(outthetanames)
 
     if outname=="pmaskedexp":
-      doSmoothnessTest = True
+      doSmoothnessTest = False
       doplotting=False
       if doSmoothnessTest and errstatus==0:
         #set up smooth function test based on regularization groups
@@ -1319,7 +1349,7 @@ for itoy in range(ntoys):
           rtndofs.append(-99)
           rtstatuses.append(-99)
 
-    if not options.toys > 0:
+    if not options.toys > 1:
       dName = 'asimov' if options.toys < 0 else 'data fit'
       correlationHist = ROOT.TH2D('correlation_matrix_channel'+outname, 'correlation matrix for '+dName+' in channel'+outname, nparmsout, 0., 1., nparmsout, 0., 1.)
       covarianceHist  = ROOT.TH2D('covariance_matrix_channel' +outname, 'covariance matrix for ' +dName+' in channel'+outname, nparmsout, 0., 1., nparmsout, 0., 1.)
@@ -1337,12 +1367,12 @@ for itoy in range(ntoys):
         covarianceHist.GetXaxis().SetBinLabel(ip1+1, '%s' % p1)
         covarianceHist.GetYaxis().SetBinLabel(ip1+1, '%s' % p1)
         
-      
-      houtvals = h5fout.create_dataset("%s_outvals" % outname, outvals.shape, dtype=outvals.dtype, compression="gzip")
-      houtvals[...] = outvals
-      
-      houtcov = h5fout.create_dataset("%s_outcov" % outname, invhessoutval.shape, dtype=invhessoutval.dtype, compression="gzip")
-      houtcov[...] = invhessoutval
+      if doh5output:
+        houtvals = h5fout.create_dataset("%s_outvals" % outname, outvals.shape, dtype=outvals.dtype, compression="gzip")
+        houtvals[...] = outvals
+        
+        houtcov = h5fout.create_dataset("%s_outcov" % outname, invhessoutval.shape, dtype=invhessoutval.dtype, compression="gzip")
+        houtcov[...] = invhessoutval
 
     if errstatus==0:
       parameterErrors = np.sqrt(np.diag(invhessoutval))
@@ -1548,7 +1578,10 @@ for itoy in range(ntoys):
         if absdsig==0. and sign==-1.:
           continue
         
-        aval = dsig*sigmasv[erroutidx]
+        if options.scanRangeUsePrefit:
+          aval = dsig
+        else:
+          aval = dsig*sigmasv[erroutidx]
         
         a.load(aval,sess)
         scanminimizer.minimize(sess)

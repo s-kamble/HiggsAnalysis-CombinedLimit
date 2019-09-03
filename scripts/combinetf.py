@@ -1154,6 +1154,32 @@ def fillHists(tag, witherrors=options.computeHistErrors):
       normprocerrval = normfullerrval[:,iproc]
     array2hist(normprocval, expHist,errors=normprocerrval)
   
+  #additional set of postfit histograms taking central value without bin-by-bin uncertainties, but including them in the uncertainties
+  if tag=='postfit' and options.binByBinStat:
+    tag = 'postfit_hybrid'
+    normfullval, nexpfullval, nexpsigval, nexpbkgval = sess.run([normfullcentral,nexpfullcentral,nexpsigcentral,nexpbkgcentral])
+  
+    expfullHist = ROOT.TH1D('expfull_%s' % tag,'',nbinsfull,-0.5, float(nbinsfull)-0.5)
+    hists.append(expfullHist)
+    array2hist(nexpfullval,expfullHist, errors=nexpfullerrval)
+    
+    expsigHist = ROOT.TH1D('expsig_%s' % tag,'',nbinsfull,-0.5, float(nbinsfull)-0.5)
+    hists.append(expsigHist)
+    array2hist(nexpsigval,expsigHist, errors=nexpsigerrval)
+    
+    expbkgHist = ROOT.TH1D('expbkg_%s' % tag,'',nbinsfull,-0.5, float(nbinsfull)-0.5)
+    hists.append(expbkgHist)
+    array2hist(nexpbkgval,expbkgHist, errors=nexpbkgerrval)
+    
+    for iproc,proc in enumerate(procs):
+      expHist = ROOT.TH1D('expproc_%s_%s' % (proc,tag),'',nbinsfull,-0.5, float(nbinsfull)-0.5)
+      hists.append(expHist)
+      normprocval = normfullval[:,iproc]
+      normprocerrval = None
+      if witherrors:
+        normprocerrval = normfullerrval[:,iproc]
+      array2hist(normprocval, expHist,errors=normprocerrval)  
+  
   print("done filling hists")
   
   return hists

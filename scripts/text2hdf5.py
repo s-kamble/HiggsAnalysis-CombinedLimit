@@ -157,14 +157,14 @@ for group in DC.polGroups:
 
 
 #list of groups of signal processes by helicity xsec
-#helgroups = []
-#helgroupidxs = []
-#for group in DC.helGroups:
-  #helgroups.append(group)
-  #helgroupidx = []
-  #for proc in DC.helGroups[group]:
-    #helgroupidx.append(procs.index(proc))
-  #helgroupidxs.append(helgroupidx)
+helgroups = []
+helgroupidxs = []
+for group in DC.helGroups:
+  helgroups.append(group)
+  helgroupidx = []
+  for proc in DC.helGroups[group]:
+    helgroupidx.append(procs.index(proc))
+  helgroupidxs.append(helgroupidx)
 
 
 #list of groups of signal processes to be summed
@@ -633,11 +633,11 @@ hpolgroups[...] = polgroups
 hpolgroupidxs = f.create_dataset("hpolgroupidxs", [len(polgroups),3], dtype='int32', compression="gzip")
 hpolgroupidxs[...] = polgroupidxs
 
-#hhelgroups = f.create_dataset("hhelgroups", [len(helgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
-#hhelgroups[...] = helgroups
+hhelgroups = f.create_dataset("hhelgroups", [len(helgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+hhelgroups[...] = helgroups
 
-#hellgroupidxs = f.create_dataset("hellgroupidxs", [len(helgroups),9], dtype='int32', compression="gzip")
-#hellgroupidxs[...] = helgroupidxs
+hhelgroupidxs = f.create_dataset("hhelgroupidxs", [len(helgroups),6], dtype='int32', compression="gzip")
+hhelgroupidxs[...] = helgroupidxs
 
 hsumgroups = f.create_dataset("hsumgroups", [len(sumgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
 hsumgroups[...] = sumgroups

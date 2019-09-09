@@ -55,6 +55,7 @@ class Datacard():
 	
 	self.chargeGroups = OrderedDict()
 	self.polGroups = OrderedDict()
+        self.helGroups = OrderedDict()
 	self.sumGroups = OrderedDict()
 	self.chargeMetaGroups = OrderedDict()
 	self.ratioMetaGroups = OrderedDict()
@@ -105,7 +106,8 @@ MB = None
 	print "DC.groups 	= "		, self.groups        		,"#",type(self.groups)	
 	print "DC.discretes 	= "		, self.discretes        	,"#",type(self.discretes)	
 	print "DC.chargeGroups 	= "		, self.chargeGroups        	,"#",type(self.chargeGroups)	
-	print "DC.polGroups 	= "		, self.polGroups        	,"#",type(self.polGroups)	
+	print "DC.polGroups 	= "		, self.polGroups        	,"#",type(self.polGroups)
+        print "DC.helGroups     = "     , self.helGroups            ,"#",type(self.helGroups)	
 	print "DC.sumGroups 	= "		, self.sumGroups        	,"#",type(self.sumGroups)	
 	print "DC.chargeMetaGroups 	= "		, self.chargeMetaGroups        	,"#",type(self.chargeMetaGroups)	
 	print "DC.ratioMetaGroups 	= "		, self.ratioMetaGroups        	,"#",type(self.ratioMetaGroups)	

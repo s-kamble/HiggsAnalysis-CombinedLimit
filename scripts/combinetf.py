@@ -814,7 +814,7 @@ for scanvar in scanvars:
   errdirs.append(errdir)
 
 globalinit = tf.global_variables_initializer()
-nexpnomassign = tf.assign(nexpnom,nexpcentral)
+nexpnomassign = tf.assign(nexpnom,nexp)
 dataobsassign = tf.assign(nobs,data_obs)
 asimovassign = tf.assign(nobs,nexpgen)
 asimovrandomizestart = tf.assign(x,tf.clip_by_value(tf.contrib.distributions.MultivariateNormalFullCovariance(x,invhessian).sample(),lb,ub))
@@ -1331,6 +1331,8 @@ for itoy in range(ntoys):
   UTval = None
   
   for ifit in range(2):
+    #set likelihood offset again (relevant in case of bad fit convergence from large offset wrt minimum)
+    sess.run(nexpnomassign)
     if dofit:
       minimize(evs,UTval)
       

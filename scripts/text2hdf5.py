@@ -95,6 +95,7 @@ for proc in DC.processes:
 systsd = OrderedDict()
 systs = []
 systsnoprofile = []
+systsnoconstraint = []
 if options.doSystematics:
   for syst in DC.systs:
     if not 'NoProfile' in syst[2]:
@@ -105,8 +106,14 @@ if options.doSystematics:
       systsd[syst[0]] = syst
       systs.append(syst[0])
       systsnoprofile.append(syst[0])
+    if 'NoConstraint' in syst[2]:
+        systsnoconstraint.append(syst[0])
 
 nsyst = len(systs)
+
+constraintweights = np.ones([nsyst],dtype=dtype)
+for syst in systsnoconstraint:
+    constraintweights[systs.index(syst)] = 0.
   
 #list of groups of systematics (nuisances) and lists of indexes
 systgroups = []
@@ -345,7 +352,7 @@ for chan in chans:
     for isyst,(name,syst) in enumerate(systsd.items()):
       stype = syst[2]
         
-      if stype in ['lnN','lnNNoProfile']:
+      if stype in ['lnN','lnNNoProfile','lnNNoConstraint']:
         ksyst = syst[4][chan][proc]
         if type(ksyst) is list:
           ksystup = ksyst[1]
@@ -612,6 +619,9 @@ hmaskedchans[...] = maskedchans
 
 #create h5py datasets with optimized chunk shapes
 nbytes = 0
+
+nbytes += writeFlatInChunks(constraintweights, f, "hconstraintweights", maxChunkBytes = chunkSize)
+constraintweights = None
 
 nbytes += writeFlatInChunks(data_obs, f, "hdata_obs", maxChunkBytes = chunkSize)
 data_obs = None

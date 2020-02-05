@@ -117,6 +117,7 @@ reggroupidxs = f['hreggroupidxs'][...]
 maskedchans = f['hmaskedchans'][...]
 
 #load arrays from file
+hconstraintweights = f['hconstraintweights']
 hdata_obs = f['hdata_obs']
 sparse = not 'hnorm' in f
 
@@ -155,6 +156,7 @@ nsystgroupsfull = len(systgroupsfull)
 #start by creating tensors which read in the hdf5 arrays (optimized for memory consumption)
 #note that this does NOT trigger the actual reading from disk, since this only happens when the
 #returned tensors are evaluated for the first time inside the graph
+constraintweights = maketensor(hconstraintweights)
 data_obs = maketensor(hdata_obs)
 if options.binByBinStat:
   hkstat = f['hkstat']
@@ -396,7 +398,7 @@ lnfull = tf.reduce_sum(-nobs*lognexp + nexp, axis=-1)
 ln = tf.reduce_sum(-nobs*(lognexp-lognexpnom) + nexp-nexpnom, axis=-1)
 
 #constraints
-lc = tf.reduce_sum(0.5*tf.square(theta - theta0))
+lc = tf.reduce_sum(constraintweights*0.5*tf.square(theta - theta0))
 
 l = ln + lc
 lfull = lnfull + lc

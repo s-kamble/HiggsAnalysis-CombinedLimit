@@ -175,6 +175,14 @@ for igroup,group in enumerate(DC.regGroups):
   for proc in DC.regGroups[group]:
     reggroupidx.append(procs.index(proc))
   reggroupidxs.append(reggroupidx)
+  
+#list of groups of systematics to be treated as additional outputs for impacts, etc (aka "nuisances of interest")
+noigroups = []
+noigroupidxs = []
+for group in DC.noiGroups:
+  noigroups.append(group)
+  for syst in DC.noiGroups[group]:
+    noigroupidxs.append(systs.index(syst))
 
 #list of channels, ordered such that masked channels are last
 chans = []
@@ -613,6 +621,12 @@ hreggroups[...] = reggroups
 
 hreggroupidxs = f.create_dataset("hreggroupidxs", [len(reggroupidxs)], dtype=h5py.special_dtype(vlen=np.dtype('int32')), compression="gzip")
 hreggroupidxs[...] = reggroupidxs
+
+hnoigroups = f.create_dataset("hnoigroups", [len(noigroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+hnoigroups[...] = noigroups
+
+hnoigroupidxs = f.create_dataset("hnoigroupidxs", [len(noigroupidxs)], dtype='int32', compression="gzip")
+hnoigroupidxs[...] = noigroupidxs
 
 hmaskedchans = f.create_dataset("hmaskedchans", [len(maskedchans)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
 hmaskedchans[...] = maskedchans

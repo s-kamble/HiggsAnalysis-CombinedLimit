@@ -114,6 +114,8 @@ chargemetagroups = f['hchargemetagroups'][...]
 chargemetagroupidxs = f['hchargemetagroupidxs'][...]
 reggroups = f['hreggroups'][...]
 reggroupidxs = f['hreggroupidxs'][...]
+noigroups = f['hnoigroups'][...]
+noigroupidxs = f['hnoigroupidxs'][...]
 maskedchans = f['hmaskedchans'][...]
 
 #load arrays from file
@@ -144,6 +146,7 @@ npolgroups = len(polgroups)
 nsumgroups = len(sumgroups)
 nchargemetagroups = len(chargemetagroups)
 nreggroups = len(reggroups)
+nnoigroups = len(noigroups)
 
 systgroupsfull = systgroups.tolist()
 systgroupsfull.append("stat")
@@ -578,6 +581,16 @@ if options.POIMode == "mu":
     lregs *= taureg
     l += lregs
     lfull += lregs
+    
+  if nnoigroups > 0:
+    nois = tf.gather(theta, noigroupidxs)
+    nois = tf.identity(nois,"nois")
+    outputs.append(nois)
+    
+    outputname  = []
+    for idx in noigroupidxs:
+      outputname.append("%s_noi" % systs[idx])
+    outputnames.append(outputname)
 
 nthreadshess = options.nThreads
 if nthreadshess<0:

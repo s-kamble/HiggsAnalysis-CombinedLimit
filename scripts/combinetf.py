@@ -47,7 +47,7 @@ if doplotting:
 parser = OptionParser(usage="usage: %prog [options] datacard.txt -o output \nrun with --help to get list of options")
 parser.add_option("-o","--output", default=None, type="string", help="output file name")
 parser.add_option("-t","--toys", default=0, type=int, help="run a given number of toys, 0 fits the data (default), and -1 fits the asimov toy")
-parser.add_option("","--toysFrequentist", default=True, action='store_true', help="run frequentist-type toys by randomizing constraint minima")
+parser.add_option("","--toysFrequentist", default=False, action='store_true', help="run frequentist-type toys by randomizing constraint minima")
 parser.add_option("","--bypassFrequentistFit", default=True, action='store_true', help="bypass fit to data when running frequentist toys to get toys based on prefit expectations")
 parser.add_option("","--bootstrapData", default=False, action='store_true', help="throw toys directly from observed data counts rather than expectation from templates")
 parser.add_option("","--randomizeStart", default=False, action='store_true', help="randomize starting values for fit (only implemented for asimov dataset for now")
@@ -164,6 +164,8 @@ data_obs = maketensor(hdata_obs)
 if options.binByBinStat:
   hkstat = f['hkstat']
   kstat = maketensor(hkstat)
+  hlogkstatproc = f['hlogkstatproc']
+  logkstatproc = maketensor(hlogkstatproc)
 if sparse:
   norm_sparse = makesparsetensor(hnorm_sparse)
   logk_sparse = makesparsetensor(hlogk_sparse)
@@ -283,6 +285,11 @@ else:
   logsnorm = tf.matmul(mlogk,mthetaalpha)
   logsnorm = tf.reshape(logsnorm,[nbinsfull,nproc])
 
+  if options.binByBinStat:
+    betaproc = tf.Variable(tf.zeros([nbinsfull,nproc],dtype=dtype),name="betaproc")
+    logkstatprocfull = tf.concat([logkstatproc, tf.zeros([nbinsmasked,nproc],dtype=dtype)],axis=0)
+    logsnorm += logkstatprocfull*betaproc
+
   snorm = tf.exp(logsnorm)
 
   #final expected yields per-bin including effect of signal
@@ -292,7 +299,7 @@ else:
   #rnorm = tf.reshape(rnorm,[1,-1])
   #pnormfull = rnorm*snorm*norm
   #nexpfull = tf.reduce_sum(pnormfull,axis=-1)
-  snormnorm = snorm*norm  
+  snormnorm = snorm*norm
   nexpfullcentral = tf.matmul(snormnorm, mrnorm)
   nexpfullcentral = tf.squeeze(nexpfullcentral,-1)
 
@@ -321,8 +328,9 @@ if options.binByBinStat:
   #beta = tf.where(tf.greater(betab,0.),betaalt,beta)
   
   betagen = tf.Variable(tf.ones([nbins],dtype=dtype),name="betagen")
+  betafreq = tf.Variable(tf.ones([nbins],dtype=dtype),name="betafreq")
   #beta = tf.Print(beta,[beta],message="beta",summarize=10000)
-  nexp = beta*nexpcentral
+  nexp = betafreq*beta*nexpcentral
   nexpgen = betagen*nexpcentral
   
   betafull = tf.concat([beta,tf.ones_like(maskedexp)],axis=0)
@@ -864,6 +872,7 @@ thetastartassign = tf.assign(x, tf.concat([xpoi,theta0],axis=0))
 bayesassign = tf.assign(x, tf.concat([xpoi,theta+tf.random_normal(shape=theta.shape,dtype=dtype)],axis=0))
 if options.binByBinStat:
   bayesassignbeta = tf.assign(betagen, tf.random_gamma(shape=[],alpha=kstat+1.,beta=kstat,dtype=tf.as_dtype(dtype)))
+  assignbetaproc = tf.assign(betaproc, tf.random_normal(shape=betaproc.shape, dtype=dtype))
 
 #initialize output tree
 fout = ROOT.TFile(options.output if options.output else 'fitresults_%i.root' % seed, 'recreate' )
@@ -1325,11 +1334,15 @@ for itoy in range(ntoys):
       #randomize actual values
       sess.run(bayesassign)
       
-    if options.binByBinStat:
+    if options.binByBinStat and not options.toysFrequentist:
       #TODO properly implement randomization of constraint parameters associated with bin-by-bin stat nuisances for frequentist toys,
       #currently bin-by-bin stat fluctuations are always handled in a bayesian way in toys
       #this also means bin-by-bin stat fluctuations are not consistently propagated for bootstrap toys from data
       sess.run(bayesassignbeta)
+      #if options.toysFrequentist:
+        #sess.run(assignbetaproc)
+      #else:
+        #sess.run(bayesassignbeta)
       
     outvalsgens,thetavalsgen = sess.run([outputs,theta])  
       
@@ -1343,6 +1356,10 @@ for itoy in range(ntoys):
     else:
       #randomize from expectation
       sess.run(toyassign)      
+      
+    
+    if options.binByBinStat and options.toysFrequentist:
+      sess.run(assignbetaproc)
 
   #assign start values for nuisance parameters to constraint minima
   sess.run(thetastartassign)
@@ -1542,7 +1559,7 @@ for itoy in range(ntoys):
         array2hist(invhessoutval, covarianceHist)
     else:
       sigmasv = -99.*np.ones_like(outvals)
-      outchsqs.append(-99.)
+      outchisqs.append(-99.)
           
     minoserrsup = -99.*np.ones_like(sigmasv)
     minoserrsdown = -99.*np.ones_like(sigmasv)

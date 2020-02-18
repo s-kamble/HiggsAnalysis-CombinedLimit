@@ -240,6 +240,7 @@ nentries = 0
 data_obs = np.zeros([nbins], dtype)
 sumw = np.zeros([nbins], dtype)
 sumw2 = np.zeros([nbins], dtype)
+logkstatproc = np.zeros([nbins,nproc], dtype)
 
 if options.sparse:
   maxsparseidx = max(nbinsfull*nproc,2*nsyst)
@@ -322,7 +323,15 @@ for chan in chans:
     if not chan in options.maskedChan:
       sumw[ibin:ibin+nbinschan] += norm_chan
       sumw2[ibin:ibin+nbinschan] += sumw2_chan
-      sumw2chan = None
+      
+      #compute log normal parameter for Barlow-Beeston bin-by-bin statistical uncertainties
+      #kstatprocchan = np.square(norm_chan)/sumw2_chan
+      logkstatprocchan = np.sqrt(sumw2_chan)/norm_chan
+      #numerical protection to avoid poorly defined constraint
+      logkstatprocchan = np.where(np.equal(norm_chan,0.), 0., logkstatprocchan)
+      logkstatprocchan = np.clip(logkstatprocchan,0.,2.)
+      logkstatproc[ibin:ibin+nbinschan,iproc] = logkstatprocchan
+      sumw2_chan = None
     
     if chan in options.maskedChan:
       norm_chan_scaled = options.scaleMaskedYields*norm_chan
@@ -642,6 +651,12 @@ data_obs = None
 
 nbytes += writeFlatInChunks(kstat, f, "hkstat", maxChunkBytes = chunkSize)
 kstat = None
+
+import sys
+np.set_printoptions(threshold=sys.maxsize)
+print(logkstatproc)
+nbytes += writeFlatInChunks(logkstatproc, f, "hlogkstatproc", maxChunkBytes = chunkSize)
+logkstatproc = None
 
 if options.sparse:
   nbytes += writeSparse(norm_sparse_indices, norm_sparse_values, norm_sparse_dense_shape, f, "hnorm_sparse", maxChunkBytes = chunkSize)

@@ -196,6 +196,20 @@ for group in DC.ratioMetaGroups:
   for proc in DC.ratioMetaGroups[group]:
     ratiometagroupidx.append(sumgroups.index(proc))
   ratiometagroupidxs.append(ratiometagroupidx)
+
+#list of groups of signal processes by helmeta
+helmetagroups = []
+helmetagroupidxs = []
+for group in DC.helMetaGroups:
+  print group, "group"
+  helmetagroups.append(group)
+  helmetagroupidx = []
+  for proc in DC.helMetaGroups[group]:
+    print proc, "in group"
+    helmetagroupidx.append(sumgroups.index(proc))
+  helmetagroupidxs.append(helmetagroupidx)
+
+print len(helmetagroupidxs)
     
 #list of groups of signal processes for regularization
 reggroups = []
@@ -237,7 +251,7 @@ for chan in chans:
   if chan in options.maskedChan:
     nbinschan = 1
   else:
-    print chan, "looking at this channel"
+    #print chan, "looking at this channel"
     data_obs_chan_hist = MB.getShape(chan,"data_obs")
     #exclude overflow/underflow bins
     nbinschan = data_obs_chan_hist.GetSize() - 2
@@ -659,6 +673,12 @@ hratiometagroups[...] = ratiometagroups
 
 hratiometagroupidxs = f.create_dataset("hratiometagroupidxs", [len(ratiometagroups),2], dtype='int32', compression="gzip")
 hratiometagroupidxs[...] = ratiometagroupidxs
+
+hhelmetagroups = f.create_dataset("hhelmetagroups", [len(helmetagroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+hhelmetagroups[...] = helmetagroups
+
+hhelmetagroupidxs = f.create_dataset("hhelmetagroupidxs", [len(helmetagroups),6], dtype='int32', compression="gzip")
+hhelmetagroupidxs[...] = helmetagroupidxs
 
 hreggroups = f.create_dataset("hreggroups", [len(reggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
 hreggroups[...] = reggroups

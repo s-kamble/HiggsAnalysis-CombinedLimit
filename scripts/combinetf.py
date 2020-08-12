@@ -101,6 +101,8 @@ sumgroupsegmentids = f['hsumgroupsegmentids'][...]
 sumgroupidxs = f['hsumgroupidxs'][...]
 chargemetagroups = f['hchargemetagroups'][...]
 chargemetagroupidxs = f['hchargemetagroupidxs'][...]
+helmetagroups = f['hhelmetagroups'][...]
+helmetagroupidxs = f['hhelmetagroupidxs'][...]
 reggroups = f['hreggroups'][...]
 reggroupidxs = f['hreggroupidxs'][...]
 maskedchans = f['hmaskedchans'][...]
@@ -131,7 +133,9 @@ npolgroups = len(polgroups)
 nhelgroups = len(helgroups)
 nsumgroups = len(sumgroups)
 nchargemetagroups = len(chargemetagroups)
+nhelmetagroups = len(helmetagroups)
 nreggroups = len(reggroups)
+
 
 systgroupsfull = systgroups.tolist()
 systgroupsfull.append("stat")
@@ -488,7 +492,8 @@ if options.POIMode == "mu":
     #factors["A4"]=2.
     #factors["AUL"]=1.
     
-    mhelcoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
+    #mhelcoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
+    mhelcoeffs = tf.constant([[2.,0.,0.],[0.,2.,0.],[0.,0.,1.]],dtype=dtype)
     mhelsums = tf.matmul(helgroupxsecs,mhelcoeffs,transpose_b=True)
     heltotals = mhelsums[:,-1]
     angularcoeffs = mhelsums[:,:-1]/mhelsums[:,-1:]
@@ -503,16 +508,14 @@ if options.POIMode == "mu":
       outputname.append("%s_unpolarizedxsec" % group)
     for group in helgroups:
       outputname.append("%s_a0" % group)
-    for group in helgroups:
-      outputname.append("%s_a1" % group)
-    for group in helgroups:
-      outputname.append("%s_a2" % group)
-    for group in helgroups:
-      outputname.append("%s_a3" % group)
+    #for group in helgroups:
+    #  outputname.append("%s_a1" % group)
+    #for group in helgroups:
+    #  outputname.append("%s_a2" % group)
+    #for group in helgroups:
+    #  outputname.append("%s_a3" % group)
     for group in helgroups:
       outputname.append("%s_a4" % group)
-    
-    
       
     outputnames.append(outputname)
     
@@ -562,6 +565,29 @@ if options.POIMode == "mu":
         outputname.append("%s_chargemetatotalxsec" % group)
       for group in chargemetagroups:
         outputname.append("%s_chargemetaasym" % group)
+      
+      outputnames.append(outputname)
+    
+    if nhelmetagroups > 0:
+      #build matrix of cross sections
+      helmetagroupxsecs = tf.reshape(tf.gather(sumpois, tf.reshape(helmetagroupidxs,[-1])),helmetagroupidxs.shape)
+      
+      mhelmetacoeffs = tf.constant([[2.,0.,0.],[0.,2.,0.],[0.,0.,1.]],dtype=dtype)
+      mhelmetasums = tf.matmul(helmetagroupxsecs,mhelmetacoeffs,transpose_b=True)
+      helmetatotals = mhelmetasums[:,-1]
+      angularcoeffs = mhelmetasums[:,:-1]/mhelmetasums[:,-1:]
+
+      helmetapois = tf.concat([helmetatotals,tf.reshape(tf.transpose(angularcoeffs),[-1])],axis=0)
+      helmetapois = tf.identity(helmetapois,"helmetapois")
+      outputs.append(helmetapois)
+      
+      outputname = []
+      for group in helmetagroups:
+        outputname.append("%s_helmetatotalxsec" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmetaa0" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmetaa4" % group)
       
       outputnames.append(outputname)
 

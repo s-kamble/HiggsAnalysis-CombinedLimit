@@ -167,6 +167,20 @@ for group in DC.chargeMetaGroups:
   for proc in DC.chargeMetaGroups[group]:
     chargemetagroupidx.append(sumgroups.index(proc))
   chargemetagroupidxs.append(chargemetagroupidx)
+
+#list of groups of signal processes by helmeta
+helmetagroups = []
+helmetagroupidxs = []
+for group in DC.helMetaGroups:
+  print group, "group"
+  helmetagroups.append(group)
+  helmetagroupidx = []
+  for proc in DC.helMetaGroups[group]:
+    print proc, "in group"
+    helmetagroupidx.append(sumgroups.index(proc))
+  helmetagroupidxs.append(helmetagroupidx)
+
+print len(helmetagroupidxs)
     
 #list of groups of signal processes for regularization
 reggroups = []
@@ -200,7 +214,7 @@ for chan in chans:
   if chan in options.maskedChan:
     nbinschan = 1
   else:
-    print chan, "looking at this channel"
+    #print chan, "looking at this channel"
     data_obs_chan_hist = MB.getShape(chan,"data_obs")
     #exclude overflow/underflow bins
     nbinschan = data_obs_chan_hist.GetSize() - 2
@@ -289,7 +303,7 @@ for chan in chans:
     norm_chan = hist2array(norm_chan_hist, include_overflow=False).astype(dtype)
     if not chan in options.maskedChan:
       if (norm_chan_hist.GetSumw2().GetSize()>0):
-        print("proper uncertainties")
+        #print("proper uncertainties")
         sumw2_chan_hist = norm_chan_hist.Clone()
         if sumw2_chan_hist.InheritsFrom('TH1F'):
             #work around for the fact GetSumw2 returns a TArrayD but TH1F expects a Float_t *
@@ -302,7 +316,7 @@ for chan in chans:
         sumw2_chan = hist2array(sumw2_chan_hist, include_overflow=False).astype(dtype)
         sumw2_chan_hist.Delete()
       else:
-        print("fallback uncertainties")
+        #print("fallback uncertainties")
         nentries_chan = (norm_chan_hist.GetEntries()/norm_chan_hist.GetSumOfWeights())*norm_chan
         sumw2_chan = nentries_chan*np.square(norm_chan/nentries_chan)
         nentries_chan = None
@@ -560,7 +574,7 @@ hpolgroupidxs[...] = polgroupidxs
 hhelgroups = f.create_dataset("hhelgroups", [len(helgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
 hhelgroups[...] = helgroups
 
-hhelgroupidxs = f.create_dataset("hhelgroupidxs", [len(helgroups),6], dtype='int32', compression="gzip")
+hhelgroupidxs = f.create_dataset("hhelgroupidxs", [len(helgroups),3], dtype='int32', compression="gzip")
 hhelgroupidxs[...] = helgroupidxs
 
 hsumgroups = f.create_dataset("hsumgroups", [len(sumgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
@@ -577,6 +591,12 @@ hchargemetagroups[...] = chargemetagroups
 
 hchargemetagroupidxs = f.create_dataset("hchargemetagroupidxs", [len(chargemetagroups),2], dtype='int32', compression="gzip")
 hchargemetagroupidxs[...] = chargemetagroupidxs
+
+hhelmetagroups = f.create_dataset("hhelmetagroups", [len(helmetagroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+hhelmetagroups[...] = helmetagroups
+
+hhelmetagroupidxs = f.create_dataset("hhelmetagroupidxs", [len(helmetagroups),3], dtype='int32', compression="gzip")
+hhelmetagroupidxs[...] = helmetagroupidxs
 
 hreggroups = f.create_dataset("hreggroups", [len(reggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
 hreggroups[...] = reggroups

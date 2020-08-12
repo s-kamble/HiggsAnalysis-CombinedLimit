@@ -32,106 +32,108 @@ class Datacard():
         self.hasShapes = False
         ## dirct of {name of uncert, boolean to indicate whether it is a flat parametric uncertainty or not}
         self.flatParamNuisances = {}
-	      ## dict of rateParam 
+          ## dict of rateParam 
         self.rateParams = {}
-	      ## dict of extArgs 
+          ## dict of extArgs 
         self.extArgs = {}
-	      ## maintain the order for rate modifiers
+          ## maintain the order for rate modifiers
         self.rateParamsOrder = set() 
         ## dirct of {name of uncert, boolean to indicate whether this nuisance is floating or not}
         self.frozenNuisances = set()
 
-	# Allows for nuisance renaming 
-	self.systematicsShapeMap = {}
+        # Allows for nuisance renaming 
+        self.systematicsShapeMap = {}
 
-        # Keep edits 
-	self.nuisanceEditLines = []
-  
-        # map of which bins should have automated Barlow-Beeston parameters
-	self.binParFlags = {}
-        
-	self.groups = {}
-	self.discretes = []
-	
-	self.chargeGroups = OrderedDict()
-	self.polGroups = OrderedDict()
+            # Keep edits 
+        self.nuisanceEditLines = []
+    
+            # map of which bins should have automated Barlow-Beeston parameters
+        self.binParFlags = {}
+
+        self.groups = {}
+        self.discretes = []
+
+        self.chargeGroups = OrderedDict()
+        self.polGroups = OrderedDict()
         self.helGroups = OrderedDict()
-	self.sumGroups = OrderedDict()
-	self.chargeMetaGroups = OrderedDict()
-	self.regGroups = OrderedDict()
+        self.sumGroups = OrderedDict()
+        self.chargeMetaGroups = OrderedDict()
+        self.helMetaGroups = OrderedDict()
+        self.regGroups = OrderedDict()
 
     def print_structure(self):
-	"""
-	Print the contents of the -> should allow for direct text2workspace on python config
-	"""
-	print """
-from HiggsAnalysis.CombinedLimit.DatacardParser import *
-from HiggsAnalysis.CombinedLimit.ModelTools import *
-from HiggsAnalysis.CombinedLimit.ShapeTools import *
-from HiggsAnalysis.CombinedLimit.PhysicsModel import *
+        """
+        Print the contents of the -> should allow for direct text2workspace on python config
+        """
+        print """
+        from HiggsAnalysis.CombinedLimit.DatacardParser import *
+        from HiggsAnalysis.CombinedLimit.ModelTools import *
+        from HiggsAnalysis.CombinedLimit.ShapeTools import *
+        from HiggsAnalysis.CombinedLimit.PhysicsModel import *
 
-from sys import exit
-from optparse import OptionParser
-parser = OptionParser()
-addDatacardParserOptions(parser)
-options,args = parser.parse_args()
-options.bin = True # make a binary workspace
+        from sys import exit
+        from optparse import OptionParser
+        parser = OptionParser()
+        addDatacardParserOptions(parser)
+        options,args = parser.parse_args()
+        options.bin = True # make a binary workspace
 
-DC = Datacard()
-MB = None
+        DC = Datacard()
+        MB = None
 
-############## Setup the datacard (must be filled in) ###########################
-	"""
+        ############## Setup the datacard (must be filled in) ###########################
+        """
 
-	print "DC.bins = 	"		, self.bins			,"#",type(self.bins)		
-	print "DC.obs = 	"		, self.obs                      ,"#",type(self.obs)			
-	print "DC.processes = 	"		, self.processes                ,"#",type(self.processes)		
-	print "DC.signals = 	"		, self.signals                  ,"#",type(self.signals)		
-	print "DC.isSignal = 	"		, self.isSignal                 ,"#",type(self.isSignal)		
-	print "DC.keyline = 	"		, self.keyline                  ,"#",type(self.keyline)		
-	print "DC.exp = 	"		, self.exp                      ,"#",type(self.exp)			
-	print "DC.systs = 	"		, self.systs                    ,"#",type(self.systs)		
-	print "DC.shapeMap = 	"		, self.shapeMap                 ,"#",type(self.shapeMap)		
-	print "DC.hasShapes = 	"		, self.hasShapes                ,"#",type(self.hasShapes)		
-	print "DC.flatParamNuisances = "	, self.flatParamNuisances       ,"#",type(self.flatParamNuisances)	
-	print "DC.rateParams = "		, self.rateParams               ,"#",type(self.rateParams)		
-	print "DC.extArgs = 	"		, self.extArgs                  ,"#",type(self.extArgs)		
-	print "DC.rateParamsOrder 	= "	, self.rateParamsOrder          ,"#",type(self.rateParamsOrder)	
-	print "DC.frozenNuisances 	= "	, self.frozenNuisances          ,"#",type(self.frozenNuisances)	
-	print "DC.systematicsShapeMap = "	, self.systematicsShapeMap      ,"#",type(self.systematicsShapeMap)	
-	print "DC.nuisanceEditLines 	= "	, self.nuisanceEditLines        ,"#",type(self.nuisanceEditLines)	
-  	print "DC.binParFlags 	= "	  	, self.binParFlags        	,"#",type(self.binParFlags)	
-	print "DC.groups 	= "		, self.groups        		,"#",type(self.groups)	
-	print "DC.discretes 	= "		, self.discretes        	,"#",type(self.discretes)	
-	print "DC.chargeGroups 	= "		, self.chargeGroups        	,"#",type(self.chargeGroups)	
-	print "DC.polGroups 	= "		, self.polGroups        	,"#",type(self.polGroups)
-        print "DC.helGroups     = "     , self.helGroups            ,"#",type(self.helGroups)	
-	print "DC.sumGroups 	= "		, self.sumGroups        	,"#",type(self.sumGroups)	
-	print "DC.chargeMetaGroups 	= "		, self.chargeMetaGroups        	,"#",type(self.chargeMetaGroups)	
-	print "DC.regGroups 	= "		, self.regGroups        	,"#",type(self.regGroups)	
+        print "DC.bins = 	"		, self.bins			,"#",type(self.bins)		
+        print "DC.obs = 	"		, self.obs                      ,"#",type(self.obs)			
+        print "DC.processes = 	"		, self.processes                ,"#",type(self.processes)		
+        print "DC.signals = 	"		, self.signals                  ,"#",type(self.signals)		
+        print "DC.isSignal = 	"		, self.isSignal                 ,"#",type(self.isSignal)		
+        print "DC.keyline = 	"		, self.keyline                  ,"#",type(self.keyline)		
+        print "DC.exp = 	"		, self.exp                      ,"#",type(self.exp)			
+        print "DC.systs = 	"		, self.systs                    ,"#",type(self.systs)		
+        print "DC.shapeMap = 	"		, self.shapeMap                 ,"#",type(self.shapeMap)		
+        print "DC.hasShapes = 	"		, self.hasShapes                ,"#",type(self.hasShapes)		
+        print "DC.flatParamNuisances = "	, self.flatParamNuisances       ,"#",type(self.flatParamNuisances)	
+        print "DC.rateParams = "		, self.rateParams               ,"#",type(self.rateParams)		
+        print "DC.extArgs = 	"		, self.extArgs                  ,"#",type(self.extArgs)		
+        print "DC.rateParamsOrder 	= "	, self.rateParamsOrder          ,"#",type(self.rateParamsOrder)	
+        print "DC.frozenNuisances 	= "	, self.frozenNuisances          ,"#",type(self.frozenNuisances)	
+        print "DC.systematicsShapeMap = "	, self.systematicsShapeMap      ,"#",type(self.systematicsShapeMap)	
+        print "DC.nuisanceEditLines 	= "	, self.nuisanceEditLines        ,"#",type(self.nuisanceEditLines)	
+        print "DC.binParFlags 	= "	  	, self.binParFlags        	,"#",type(self.binParFlags)	
+        print "DC.groups 	= "		, self.groups        		,"#",type(self.groups)	
+        print "DC.discretes 	= "		, self.discretes        	,"#",type(self.discretes)	
+        print "DC.chargeGroups 	= "		, self.chargeGroups        	,"#",type(self.chargeGroups)	
+        print "DC.polGroups 	= "		, self.polGroups        	,"#",type(self.polGroups)
+        print "DC.helGroups     = "             , self.helGroups            ,"#",type(self.helGroups)	
+        print "DC.sumGroups 	= "		, self.sumGroups        	,"#",type(self.sumGroups)	
+        print "DC.chargeMetaGroups 	= "		, self.chargeMetaGroups        	,"#",type(self.chargeMetaGroups)
+        print "DC.helMetaGroups 	= "		, self.helMetaGroups        	,"#",type(self.helMetaGroups)	
+        print "DC.regGroups 	= "		, self.regGroups        	,"#",type(self.regGroups)	
 
-	print """
+        print """
 
-###### User defined options #############################################
+        ###### User defined options #############################################
 
-options.out 	 = "combine_workspace.root"  	# Output workspace name
-options.fileName = "./" 			# Path to input ROOT files 
-options.verbose  = "1" 				# Verbosity
+        options.out 	 = "combine_workspace.root"  	# Output workspace name
+        options.fileName = "./" 			# Path to input ROOT files 
+        options.verbose  = "1" 				# Verbosity
 
-##########################################################################
+        ##########################################################################
 
-if DC.hasShapes:
-    MB = ShapeBuilder(DC, options)
-else:
-    MB = CountingModelBuilder(DC, options)
+        if DC.hasShapes:
+            MB = ShapeBuilder(DC, options)
+        else:
+            MB = CountingModelBuilder(DC, options)
 
-# Set physics models 
-MB.setPhysics(defaultModel)
-MB.doModel()
-	"""
+        # Set physics models 
+        MB.setPhysics(defaultModel)
+        MB.doModel()
+        """
 
-	# map of which bins should have automated Barlow-Beeston parameters
-	self.binParFlags = {}
+        # map of which bins should have automated Barlow-Beeston parameters
+        self.binParFlags = {}
 
     def list_of_bins(self) :
         """
@@ -245,13 +247,13 @@ MB.doModel()
         return self.exp[bin][proc]
     
     def getAllVariables(self):
-    	"""
-	Return all variables defined in the datacard
-	"""
-	allVars = tuple([syst[0] for syst in self.systs]+self.flatParamNuisances.keys()+self.extArgs.keys()+self.discretes)
-	for rp in self.rateParams: 
-	  modifiers = self.rateParams[rp]
-	  for p in modifiers : allVars+=tuple([p[0][0]])
-
-	return list(set(allVars))
+        """
+        Return all variables defined in the datacard
+        """
+        allVars = tuple([syst[0] for syst in self.systs]+self.flatParamNuisances.keys()+self.extArgs.keys()+self.discretes)
+        for rp in self.rateParams: 
+          modifiers = self.rateParams[rp]
+          for p in modifiers : allVars+=tuple([p[0][0]])
+    
+        return list(set(allVars))
 

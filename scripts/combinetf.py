@@ -158,6 +158,7 @@ nreggroups = len(reggroups)
 nnoigroups = len(noigroups)
 
 
+
 systgroupsfull = systgroups.tolist()
 systgroupsfull.append("stat")
 if options.binByBinStat:
@@ -625,8 +626,6 @@ if options.POIMode == "mu":
     if nhelmetagroups > 0:
       #build matrix of cross sections
       helmetagroupxsecs = tf.reshape(tf.gather(sumpois, tf.reshape(helmetagroupidxs,[-1])),helmetagroupidxs.shape)
-      
-      #mhelmetacoeffs = tf.constant([[2.,0.,0.],[0.,2.,0.],[0.,0.,1.]],dtype=dtype)
       mhelmetacoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
       mhelmetasums = tf.matmul(helmetagroupxsecs,mhelmetacoeffs,transpose_b=True)
       helmetatotals = mhelmetasums[:,-1]

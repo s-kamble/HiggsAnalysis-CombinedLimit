@@ -492,8 +492,8 @@ if options.POIMode == "mu":
     #factors["A4"]=2.
     #factors["AUL"]=1.
     
-    #mhelcoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
-    mhelcoeffs = tf.constant([[2.,0.,0.],[0.,2.,0.],[0.,0.,1.]],dtype=dtype)
+    mhelcoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
+    #mhelcoeffs = tf.constant([[2.,0.,0.],[0.,2.,0.],[0.,0.,1.]],dtype=dtype)
     mhelsums = tf.matmul(helgroupxsecs,mhelcoeffs,transpose_b=True)
     heltotals = mhelsums[:,-1]
     angularcoeffs = mhelsums[:,:-1]/mhelsums[:,-1:]
@@ -507,15 +507,15 @@ if options.POIMode == "mu":
     for group in helgroups:
       outputname.append("%s_unpolarizedxsec" % group)
     for group in helgroups:
-      outputname.append("%s_a0" % group)
-    #for group in helgroups:
-    #  outputname.append("%s_a1" % group)
-    #for group in helgroups:
-    #  outputname.append("%s_a2" % group)
-    #for group in helgroups:
-    #  outputname.append("%s_a3" % group)
+      outputname.append("%s_A0" % group)
     for group in helgroups:
-      outputname.append("%s_a4" % group)
+      outputname.append("%s_A1" % group)
+    for group in helgroups:
+      outputname.append("%s_A2" % group)
+    for group in helgroups:
+      outputname.append("%s_A3" % group)
+    for group in helgroups:
+      outputname.append("%s_A4" % group)
       
     outputnames.append(outputname)
     
@@ -572,7 +572,8 @@ if options.POIMode == "mu":
       #build matrix of cross sections
       helmetagroupxsecs = tf.reshape(tf.gather(sumpois, tf.reshape(helmetagroupidxs,[-1])),helmetagroupidxs.shape)
       
-      mhelmetacoeffs = tf.constant([[2.,0.,0.],[0.,2.,0.],[0.,0.,1.]],dtype=dtype)
+      #mhelmetacoeffs = tf.constant([[2.,0.,0.],[0.,2.,0.],[0.,0.,1.]],dtype=dtype)
+      mhelmetacoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
       mhelmetasums = tf.matmul(helmetagroupxsecs,mhelmetacoeffs,transpose_b=True)
       helmetatotals = mhelmetasums[:,-1]
       angularcoeffs = mhelmetasums[:,:-1]/mhelmetasums[:,-1:]
@@ -583,11 +584,17 @@ if options.POIMode == "mu":
       
       outputname = []
       for group in helmetagroups:
-        outputname.append("%s_helmetatotalxsec" % group)
+        outputname.append("%s_helmeta_unpolarizedxsec" % group)
       for group in helmetagroups:
-        outputname.append("%s_helmetaa0" % group)
+        outputname.append("%s_helmeta_A0" % group)
       for group in helmetagroups:
-        outputname.append("%s_helmetaa4" % group)
+        outputname.append("%s_helmeta_A1" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A2" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A3" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A4" % group)
       
       outputnames.append(outputname)
 

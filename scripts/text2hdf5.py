@@ -574,7 +574,7 @@ hpolgroupidxs[...] = polgroupidxs
 hhelgroups = f.create_dataset("hhelgroups", [len(helgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
 hhelgroups[...] = helgroups
 
-hhelgroupidxs = f.create_dataset("hhelgroupidxs", [len(helgroups),3], dtype='int32', compression="gzip")
+hhelgroupidxs = f.create_dataset("hhelgroupidxs", [len(helgroups),6], dtype='int32', compression="gzip")
 hhelgroupidxs[...] = helgroupidxs
 
 hsumgroups = f.create_dataset("hsumgroups", [len(sumgroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
@@ -595,7 +595,7 @@ hchargemetagroupidxs[...] = chargemetagroupidxs
 hhelmetagroups = f.create_dataset("hhelmetagroups", [len(helmetagroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
 hhelmetagroups[...] = helmetagroups
 
-hhelmetagroupidxs = f.create_dataset("hhelmetagroupidxs", [len(helmetagroups),3], dtype='int32', compression="gzip")
+hhelmetagroupidxs = f.create_dataset("hhelmetagroupidxs", [len(helmetagroups),6], dtype='int32', compression="gzip")
 hhelmetagroupidxs[...] = helmetagroupidxs
 
 hreggroups = f.create_dataset("hreggroups", [len(reggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")

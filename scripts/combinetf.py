@@ -626,7 +626,8 @@ if options.POIMode == "mu":
       #build matrix of cross sections
       helmetagroupxsecs = tf.reshape(tf.gather(sumpois, tf.reshape(helmetagroupidxs,[-1])),helmetagroupidxs.shape)
       
-      mhelmetacoeffs = tf.constant([[2.,0.,0.],[0.,2.,0.],[0.,0.,1.]],dtype=dtype)
+      #mhelmetacoeffs = tf.constant([[2.,0.,0.],[0.,2.,0.],[0.,0.,1.]],dtype=dtype)
+      mhelmetacoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
       mhelmetasums = tf.matmul(helmetagroupxsecs,mhelmetacoeffs,transpose_b=True)
       helmetatotals = mhelmetasums[:,-1]
       angularcoeffs = mhelmetasums[:,:-1]/mhelmetasums[:,-1:]
@@ -637,11 +638,17 @@ if options.POIMode == "mu":
       
       outputname = []
       for group in helmetagroups:
-        outputname.append("%s_helmetatotalxsec" % group)
+        outputname.append("%s_helmeta_unpolarizedxsec" % group)
       for group in helmetagroups:
-        outputname.append("%s_helmetaa0" % group)
+        outputname.append("%s_helmeta_A0" % group)
       for group in helmetagroups:
-        outputname.append("%s_helmetaa4" % group)
+        outputname.append("%s_helmeta_A1" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A2" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A3" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A4" % group)
       
       outputnames.append(outputname)
 

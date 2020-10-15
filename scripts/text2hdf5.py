@@ -254,7 +254,7 @@ for chan in chans:
     #print chan, "looking at this channel"
     data_obs_chan_hist = MB.getShape(chan,"data_obs")
     #exclude overflow/underflow bins
-    nbinschan = data_obs_chan_hist.GetSize() - 2
+    nbinschan = data_obs_chan_hist.GetNbinsX()*data_obs_chan_hist.GetNbinsY() * data_obs_chan_hist.GetNbinsZ()
     nbins += nbinschan
   
   nbinsfull += nbinschan
@@ -318,7 +318,7 @@ for chan in chans:
   if not chan in options.maskedChan:
     #get histogram, convert to np array with desired type, and exclude underflow/overflow bins
     data_obs_chan_hist = MB.getShape(chan,"data_obs")
-    data_obs_chan = hist2array(data_obs_chan_hist, include_overflow=False).astype(dtype)
+    data_obs_chan = hist2array(data_obs_chan_hist, include_overflow=False).ravel().astype(dtype)
     data_obs_chan_hist.Delete()
     nbinschan = data_obs_chan.shape[0]
     #write to output array
@@ -337,7 +337,7 @@ for chan in chans:
     
     #get histogram, convert to np array with desired type, and exclude underflow/overflow bins
     norm_chan_hist = MB.getShape(chan,proc)
-    norm_chan = hist2array(norm_chan_hist, include_overflow=False).astype(dtype)
+    norm_chan = hist2array(norm_chan_hist, include_overflow=False).ravel().astype(dtype)
     if not chan in options.maskedChan:
       if (norm_chan_hist.GetSumw2().GetSize()>0):
         #print("proper uncertainties")
@@ -350,10 +350,12 @@ for chan in chans:
             sumw2_chan_hist.Set(sumw2_chan_hist.GetSumw2().GetSize(), sumw2f)
         else:
             sumw2_chan_hist.Set(sumw2_chan_hist.GetSumw2().GetSize(), sumw2_chan_hist.GetSumw2().GetArray())
-        sumw2_chan = hist2array(sumw2_chan_hist, include_overflow=False).astype(dtype)
+        sumw2_chan = hist2array(sumw2_chan_hist, include_overflow=False).ravel().astype(dtype)
         sumw2_chan_hist.Delete()
       else:
         print("Warning: Sumw2 not filled for histograms, using fallback method for computing uncertainties, binByBin uncertainties for templates may not be reliable")
+        print(proc, "is problematic")
+        print(norm_chan_hist.GetSumw2().GetSize())
         nentries_chan = (norm_chan_hist.GetEntries()/norm_chan_hist.GetSumOfWeights())*norm_chan
         sumw2_chan = nentries_chan*np.square(norm_chan/nentries_chan)
         nentries_chan = None
@@ -435,7 +437,7 @@ for chan in chans:
           continue
         
         systup_chan_hist = MB.getShape(chan,proc,name+"Up")
-        systup_chan = hist2array(systup_chan_hist, include_overflow=False).astype(dtype)
+        systup_chan = hist2array(systup_chan_hist, include_overflow=False).ravel().astype(dtype)
         systup_chan_hist.Delete()
         if systup_chan.shape[0] != nbinschan:
           raise Exception("Mismatch between number of bins in channel for data and systematic variation template")
@@ -444,7 +446,7 @@ for chan in chans:
         systup_chan = None
         
         systdown_chan_hist = MB.getShape(chan,proc,name+"Down")
-        systdown_chan = hist2array(systdown_chan_hist, include_overflow=False).astype(dtype)
+        systdown_chan = hist2array(systdown_chan_hist, include_overflow=False).ravel().astype(dtype)
         systdown_chan_hist.Delete()
         if systdown_chan.shape[0] != nbinschan:
           raise Exception("Mismatch between number of bins in channel for data and systematic variation template")

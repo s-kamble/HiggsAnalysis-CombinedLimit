@@ -1,5 +1,6 @@
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
 from HiggsAnalysis.CombinedLimit.tfsparseutils import SimpleSparseTensor
@@ -39,7 +40,7 @@ def maketensor(h5dset):
   dset = tf.data.Dataset.range(nchunks)
   dset = dset.map(lambda x: tf.reshape(tf.py_func(readChunk,[x],tf.as_dtype(h5dset.dtype)),h5dset.chunks))
   if nchunks>1:
-    dset = dset.apply(tf.contrib.data.map_and_batch(lambda x: x, nchunks))
+    dset = dset.apply(tf.data.experimental.map_and_batch(lambda x: x, nchunks))
     if not h5dset.shape[0]%h5dset.chunks[0] == 0:
       paddedshape = (nchunks*chunksize,)
       dset = dset.map(lambda x: tf.reshape(x,paddedshape)[:h5dset.shape[0]])

@@ -1,10 +1,14 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import re
 from sys import argv, stdout, stderr, exit, modules
 from optparse import OptionParser
 import multiprocessing
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
+#TODO once tfp is available in CMSSW
+#import tensorflow_probability as tfp
 
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import sparse_tensor
@@ -15,7 +19,6 @@ from tensorflow.python.ops import sparse_ops
 
 import numpy as np
 import h5py
-import h5py_cache
 from HiggsAnalysis.CombinedLimit.tfh5pyutils import maketensor,makesparsetensor
 from HiggsAnalysis.CombinedLimit.tfsparseutils import simple_sparse_tensor_dense_matmul, simple_sparse_slice0begin, simple_sparse_to_dense, SimpleSparseTensor, makeCache
 from HiggsAnalysis.CombinedLimit.lsr1trustobs import SR1TrustExact
@@ -94,7 +97,7 @@ options.fileName = args[0]
 
 cacheSize = 4*1024**2
 #TODO open file an extra time and enforce sufficient cache size for second file open
-f = h5py_cache.File(options.fileName, chunk_cache_mem_size=cacheSize, mode='r')
+f = h5py.File(options.fileName, rdcc_nbytes=cacheSize, mode='r')
 
 #load text arrays from file
 procs = f['hprocs'][...]
@@ -952,7 +955,9 @@ globalinit = tf.global_variables_initializer()
 nexpnomassign = tf.assign(nexpnom,nexp)
 dataobsassign = tf.assign(nobs,data_obs)
 asimovassign = tf.assign(nobs,nexpgen)
-asimovrandomizestart = tf.assign(x,tf.clip_by_value(tf.contrib.distributions.MultivariateNormalFullCovariance(x,invhessian).sample(),lb,ub))
+#TODO fix this once tfp is available in CMSSW environment
+asimovrandomizestart = None
+#asimovrandomizestart = tf.assign(x,tf.clip_by_value(tfp.distributions.MultivariateNormalFullCovariance(x,invhessian).sample(),lb,ub))
 bootstrapassign = tf.assign(nobs,tf.random_poisson(nobs,shape=[],dtype=dtype))
 toyassign = tf.assign(nobs,tf.random_poisson(nexpgen,shape=[],dtype=dtype))
 #TODO properly implement randomization of constraint parameters associated with bin-by-bin stat nuisances for frequentist toys,
@@ -1112,7 +1117,7 @@ doh5output = options.doh5Output
 
 if doh5output:
   #initialize h5py output
-  h5fout = h5py_cache.File('fitresults_%i.hdf5' % seed, chunk_cache_mem_size=cacheSize, mode='w')
+  h5fout = h5py.File('fitresults_%i.hdf5' % seed, rdcc_nbytes=cacheSize, mode='w')
 
   #copy some info to output file
   f.copy('hreggroups',h5fout)

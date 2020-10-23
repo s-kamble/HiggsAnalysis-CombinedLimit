@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import re
 from sys import argv, stdout, stderr, exit, modules, getrefcount
 from optparse import OptionParser

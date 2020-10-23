@@ -1,10 +1,14 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import re
 from sys import argv, stdout, stderr, exit, modules
 from optparse import OptionParser
 import multiprocessing
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
+#TODO once tfp is available in CMSSW
+#import tensorflow_probability as tfp
 
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import sparse_tensor
@@ -880,7 +884,9 @@ globalinit = tf.global_variables_initializer()
 nexpnomassign = tf.assign(nexpnom,nexp)
 dataobsassign = tf.assign(nobs,data_obs)
 asimovassign = tf.assign(nobs,nexpgen)
-asimovrandomizestart = tf.assign(x,tf.clip_by_value(tf.contrib.distributions.MultivariateNormalFullCovariance(x,invhessian).sample(),lb,ub))
+#TODO fix this once tfp is available in CMSSW environment
+asimovrandomizestart = None
+#asimovrandomizestart = tf.assign(x,tf.clip_by_value(tfp.distributions.MultivariateNormalFullCovariance(x,invhessian).sample(),lb,ub))
 bootstrapassign = tf.assign(nobs,tf.random_poisson(nobs,shape=[],dtype=dtype))
 toyassign = tf.assign(nobs,tf.random_poisson(nexpgen,shape=[],dtype=dtype))
 #TODO properly implement randomization of constraint parameters associated with bin-by-bin stat nuisances for frequentist toys,

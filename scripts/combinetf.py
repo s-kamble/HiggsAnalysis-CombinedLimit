@@ -19,7 +19,6 @@ from tensorflow.python.ops import sparse_ops
 
 import numpy as np
 import h5py
-import h5py_cache
 from HiggsAnalysis.CombinedLimit.tfh5pyutils import maketensor,makesparsetensor
 from HiggsAnalysis.CombinedLimit.tfsparseutils import simple_sparse_tensor_dense_matmul, simple_sparse_slice0begin, simple_sparse_to_dense, SimpleSparseTensor, makeCache
 from HiggsAnalysis.CombinedLimit.lsr1trustobs import SR1TrustExact
@@ -98,7 +97,7 @@ options.fileName = args[0]
 
 cacheSize = 4*1024**2
 #TODO open file an extra time and enforce sufficient cache size for second file open
-f = h5py_cache.File(options.fileName, chunk_cache_mem_size=cacheSize, mode='r')
+f = h5py.File(options.fileName, rdcc_nbytes=cacheSize, mode='r')
 
 #load text arrays from file
 procs = f['hprocs'][...]
@@ -1046,7 +1045,7 @@ doh5output = options.doh5Output
 
 if doh5output:
   #initialize h5py output
-  h5fout = h5py_cache.File('fitresults_%i.hdf5' % seed, chunk_cache_mem_size=cacheSize, mode='w')
+  h5fout = h5py.File('fitresults_%i.hdf5' % seed, rdcc_nbytes=cacheSize, mode='w')
 
   #copy some info to output file
   f.copy('hreggroups',h5fout)

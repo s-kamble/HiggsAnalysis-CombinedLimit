@@ -5,7 +5,6 @@ from optparse import OptionParser
 
 import numpy as np
 import h5py
-import h5py_cache
 from HiggsAnalysis.CombinedLimit.h5pyutils import writeFlatInChunks, writeSparse
 import math
 import gc
@@ -616,7 +615,7 @@ if chunkSize > options.chunkSize:
 outfilename = options.out.replace('.root','.hdf5')
 if options.sparse:
   outfilename = outfilename.replace('.hdf5','_sparse.hdf5')
-f = h5py_cache.File(outfilename, chunk_cache_mem_size=chunkSize, mode='w')
+f = h5py.File(outfilename, rdcc_nbytes=chunkSize, mode='w')
 
 #save some lists of strings to the file for later use
 hprocs = f.create_dataset("hprocs", [len(procs)], dtype=h5py.special_dtype(vlen=str), compression="gzip")

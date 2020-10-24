@@ -110,6 +110,8 @@ chargegroups = f['hchargegroups'][...]
 chargegroupidxs = f['hchargegroupidxs'][...]
 polgroups = f['hpolgroups'][...]
 polgroupidxs = f['hpolgroupidxs'][...]
+helgroups = f['hhelgroups'][...]
+helgroupidxs = f['hhelgroupidxs'][...]
 sumgroups = f['hsumgroups'][...]
 sumgroupsegmentids = f['hsumgroupsegmentids'][...]
 sumgroupidxs = f['hsumgroupidxs'][...]
@@ -117,6 +119,8 @@ chargemetagroups = f['hchargemetagroups'][...]
 chargemetagroupidxs = f['hchargemetagroupidxs'][...]
 ratiometagroups = f['hratiometagroups'][...]
 ratiometagroupidxs = f['hratiometagroupidxs'][...]
+helmetagroups = f['hhelmetagroups'][...]
+helmetagroupidxs = f['hhelmetagroupidxs'][...]
 reggroups = f['hreggroups'][...]
 reggroupidxs = f['hreggroupidxs'][...]
 noigroups = f['hnoigroups'][...]
@@ -148,11 +152,15 @@ nsignals = len(signals)
 nsystgroups = len(systgroups)
 nchargegroups = len(chargegroups)
 npolgroups = len(polgroups)
+nhelgroups = len(helgroups)
 nsumgroups = len(sumgroups)
 nchargemetagroups = len(chargemetagroups)
 nratiometagroups = len(ratiometagroups)
+nhelmetagroups = len(helmetagroups)
 nreggroups = len(reggroups)
 nnoigroups = len(noigroups)
+
+
 
 systgroupsfull = systgroups.tolist()
 systgroupsfull.append("stat")
@@ -509,6 +517,44 @@ if options.POIMode == "mu":
       outputname.append("%s_a4" % group)
       
     outputnames.append(outputname)
+
+  #transformation from helicity xsecs to angular coefficients
+  if nhelgroups > 0:  
+    #build matrix of cross sections
+    helgroupxsecs = tf.reshape(tf.gather(pmaskedexp, tf.reshape(helgroupidxs,[-1])),helgroupidxs.shape)
+    
+    #factors["A0"]= 2.
+    #factors["A1"]=2.*math.sqrt(2)
+    #factors["A2"]=4.
+    #factors["A3"]=4.*math.sqrt(2)
+    #factors["A4"]=2.
+    #factors["AUL"]=1.
+    
+    mhelcoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
+    mhelsums = tf.matmul(helgroupxsecs,mhelcoeffs,transpose_b=True)
+    heltotals = mhelsums[:,-1]
+    angularcoeffs = mhelsums[:,:-1]/mhelsums[:,-1:]
+    
+    helpois = tf.concat([heltotals,tf.reshape(tf.transpose(angularcoeffs),[-1])],axis=0)
+    helpois = tf.identity(helpois,"helpois")
+    outputs.append(helpois)
+    
+    outputname = []
+    
+    for group in helgroups:
+      outputname.append("%s_unpolarizedxsec" % group)
+    for group in helgroups:
+      outputname.append("%s_A0" % group)
+    for group in helgroups:
+      outputname.append("%s_A1" % group)
+    for group in helgroups:
+      outputname.append("%s_A2" % group)
+    for group in helgroups:
+      outputname.append("%s_A3" % group)
+    for group in helgroups:
+      outputname.append("%s_A4" % group)
+      
+    outputnames.append(outputname)
     
   #sums of cross sections if defined
   if nsumgroups > 0:
@@ -579,6 +625,32 @@ if options.POIMode == "mu":
         outputname.append("%s_ratiometatotalxsec" % group)
       for group in ratiometagroups:
         outputname.append("%s_ratiometaratio" % group)
+    
+    if nhelmetagroups > 0:
+      #build matrix of cross sections
+      helmetagroupxsecs = tf.reshape(tf.gather(sumpois, tf.reshape(helmetagroupidxs,[-1])),helmetagroupidxs.shape)
+      mhelmetacoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
+      mhelmetasums = tf.matmul(helmetagroupxsecs,mhelmetacoeffs,transpose_b=True)
+      helmetatotals = mhelmetasums[:,-1]
+      angularcoeffs = mhelmetasums[:,:-1]/mhelmetasums[:,-1:]
+
+      helmetapois = tf.concat([helmetatotals,tf.reshape(tf.transpose(angularcoeffs),[-1])],axis=0)
+      helmetapois = tf.identity(helmetapois,"helmetapois")
+      outputs.append(helmetapois)
+      
+      outputname = []
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_unpolarizedxsec" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A0" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A1" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A2" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A3" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A4" % group)
       
       outputnames.append(outputname)
 

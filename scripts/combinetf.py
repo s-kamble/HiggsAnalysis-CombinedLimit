@@ -6,6 +6,7 @@ import multiprocessing
 
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
+tf.enable_control_flow_v2()
 
 #TODO once tfp is available in CMSSW
 #import tensorflow_probability as tfp
@@ -46,6 +47,8 @@ from scipy.optimize import minimize as scipyminimize
 doplotting=False
 if doplotting:
   import matplotlib.pyplot as plt
+  
+
 
 parser = OptionParser(usage="usage: %prog [options] datacard.txt -o output \nrun with --help to get list of options")
 parser.add_option("-o","--output", default=None, type="string", help="output file name")
@@ -87,6 +90,7 @@ parser.add_option("","--useExpNonProfiledErrs", default=False, action='store_tru
 if len(args) == 0:
     parser.print_usage()
     exit(1)
+    
     
 seed = options.seed
 print(seed)
@@ -402,7 +406,7 @@ nobsnull = tf.equal(nobs,tf.zeros_like(nobs))
 nexpsafe = tf.where(nobsnull, tf.ones_like(nobs), nexp)
 lognexp = tf.log(nexpsafe)
 
-nexpnom = tf.Variable(nexp, trainable=False, name="nexpnom")
+nexpnom = tf.Variable(tf.zeros_like(data_obs), trainable=False, name="nexpnom")
 nexpnomsafe = tf.where(nobsnull, tf.ones_like(nobs), nexpnom)
 lognexpnom = tf.log(nexpnomsafe)
 
@@ -952,6 +956,7 @@ for scanvar in scanvars:
   errdirs.append(errdir)
 
 globalinit = tf.global_variables_initializer()
+
 nexpnomassign = tf.assign(nexpnom,nexp)
 dataobsassign = tf.assign(nobs,data_obs)
 asimovassign = tf.assign(nobs,nexpgen)

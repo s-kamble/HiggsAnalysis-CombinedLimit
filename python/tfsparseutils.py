@@ -1,5 +1,6 @@
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
+tf.enable_control_flow_v2()
 
 from tensorflow.python.ops import gen_sparse_ops
 from tensorflow.python.framework import ops

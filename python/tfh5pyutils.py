@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
+tf.enable_control_flow_v2()
+
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
 from HiggsAnalysis.CombinedLimit.tfsparseutils import SimpleSparseTensor

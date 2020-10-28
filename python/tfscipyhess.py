@@ -5,6 +5,7 @@ from __future__ import print_function
 import numpy as np
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
+tf.enable_control_flow_v2()
 
 from tensorflow.python.framework import dtypes
 from tensorflow.python.ops import tensor_array_ops

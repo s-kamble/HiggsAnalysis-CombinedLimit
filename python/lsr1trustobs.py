@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
+tf.enable_control_flow_v2()
+
 import math
 
 class SR1TrustExact:

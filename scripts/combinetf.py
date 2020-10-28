@@ -15,7 +15,6 @@ from tensorflow.python.ops import sparse_ops
 
 import numpy as np
 import h5py
-import h5py_cache
 from HiggsAnalysis.CombinedLimit.tfh5pyutils import maketensor,makesparsetensor
 from HiggsAnalysis.CombinedLimit.tfsparseutils import simple_sparse_tensor_dense_matmul, simple_sparse_slice0begin, simple_sparse_to_dense, SimpleSparseTensor, makeCache
 from HiggsAnalysis.CombinedLimit.lsr1trustobs import SR1TrustExact
@@ -94,7 +93,7 @@ options.fileName = args[0]
 
 cacheSize = 4*1024**2
 #TODO open file an extra time and enforce sufficient cache size for second file open
-f = h5py_cache.File(options.fileName, chunk_cache_mem_size=cacheSize, mode='r')
+f = h5py.File(options.fileName, rdcc_nbytes=cacheSize, mode='r')
 
 #load text arrays from file
 procs = f['hprocs'][...]
@@ -107,6 +106,8 @@ chargegroups = f['hchargegroups'][...]
 chargegroupidxs = f['hchargegroupidxs'][...]
 polgroups = f['hpolgroups'][...]
 polgroupidxs = f['hpolgroupidxs'][...]
+helgroups = f['hhelgroups'][...]
+helgroupidxs = f['hhelgroupidxs'][...]
 sumgroups = f['hsumgroups'][...]
 sumgroupsegmentids = f['hsumgroupsegmentids'][...]
 sumgroupidxs = f['hsumgroupidxs'][...]
@@ -114,6 +115,8 @@ chargemetagroups = f['hchargemetagroups'][...]
 chargemetagroupidxs = f['hchargemetagroupidxs'][...]
 ratiometagroups = f['hratiometagroups'][...]
 ratiometagroupidxs = f['hratiometagroupidxs'][...]
+helmetagroups = f['hhelmetagroups'][...]
+helmetagroupidxs = f['hhelmetagroupidxs'][...]
 reggroups = f['hreggroups'][...]
 reggroupidxs = f['hreggroupidxs'][...]
 noigroups = f['hnoigroups'][...]
@@ -145,11 +148,15 @@ nsignals = len(signals)
 nsystgroups = len(systgroups)
 nchargegroups = len(chargegroups)
 npolgroups = len(polgroups)
+nhelgroups = len(helgroups)
 nsumgroups = len(sumgroups)
 nchargemetagroups = len(chargemetagroups)
 nratiometagroups = len(ratiometagroups)
+nhelmetagroups = len(helmetagroups)
 nreggroups = len(reggroups)
 nnoigroups = len(noigroups)
+
+
 
 systgroupsfull = systgroups.tolist()
 systgroupsfull.append("stat")
@@ -506,6 +513,44 @@ if options.POIMode == "mu":
       outputname.append("%s_a4" % group)
       
     outputnames.append(outputname)
+
+  #transformation from helicity xsecs to angular coefficients
+  if nhelgroups > 0:  
+    #build matrix of cross sections
+    helgroupxsecs = tf.reshape(tf.gather(pmaskedexp, tf.reshape(helgroupidxs,[-1])),helgroupidxs.shape)
+    
+    #factors["A0"]= 2.
+    #factors["A1"]=2.*math.sqrt(2)
+    #factors["A2"]=4.
+    #factors["A3"]=4.*math.sqrt(2)
+    #factors["A4"]=2.
+    #factors["AUL"]=1.
+    
+    mhelcoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
+    mhelsums = tf.matmul(helgroupxsecs,mhelcoeffs,transpose_b=True)
+    heltotals = mhelsums[:,-1]
+    angularcoeffs = mhelsums[:,:-1]/mhelsums[:,-1:]
+    
+    helpois = tf.concat([heltotals,tf.reshape(tf.transpose(angularcoeffs),[-1])],axis=0)
+    helpois = tf.identity(helpois,"helpois")
+    outputs.append(helpois)
+    
+    outputname = []
+    
+    for group in helgroups:
+      outputname.append("%s_unpolarizedxsec" % group)
+    for group in helgroups:
+      outputname.append("%s_A0" % group)
+    for group in helgroups:
+      outputname.append("%s_A1" % group)
+    for group in helgroups:
+      outputname.append("%s_A2" % group)
+    for group in helgroups:
+      outputname.append("%s_A3" % group)
+    for group in helgroups:
+      outputname.append("%s_A4" % group)
+      
+    outputnames.append(outputname)
     
   #sums of cross sections if defined
   if nsumgroups > 0:
@@ -576,6 +621,32 @@ if options.POIMode == "mu":
         outputname.append("%s_ratiometatotalxsec" % group)
       for group in ratiometagroups:
         outputname.append("%s_ratiometaratio" % group)
+    
+    if nhelmetagroups > 0:
+      #build matrix of cross sections
+      helmetagroupxsecs = tf.reshape(tf.gather(sumpois, tf.reshape(helmetagroupidxs,[-1])),helmetagroupidxs.shape)
+      mhelmetacoeffs = tf.constant([[2.,0.,0.,0.,0.,0.],[0.,2.*math.sqrt(2),0.,0.,0.,0.],[0.,0.,4.,0.,0.,0.],[0.,0.,0.,4.*math.sqrt(2),0.,0.],[0.,0.,0.,0.,2.,0.],[0.,0.,0.,0.,0.,1.]],dtype=dtype)
+      mhelmetasums = tf.matmul(helmetagroupxsecs,mhelmetacoeffs,transpose_b=True)
+      helmetatotals = mhelmetasums[:,-1]
+      angularcoeffs = mhelmetasums[:,:-1]/mhelmetasums[:,-1:]
+
+      helmetapois = tf.concat([helmetatotals,tf.reshape(tf.transpose(angularcoeffs),[-1])],axis=0)
+      helmetapois = tf.identity(helmetapois,"helmetapois")
+      outputs.append(helmetapois)
+      
+      outputname = []
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_unpolarizedxsec" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A0" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A1" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A2" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A3" % group)
+      for group in helmetagroups:
+        outputname.append("%s_helmeta_A4" % group)
       
       outputnames.append(outputname)
 
@@ -1040,7 +1111,7 @@ doh5output = options.doh5Output
 
 if doh5output:
   #initialize h5py output
-  h5fout = h5py_cache.File('fitresults_%i.hdf5' % seed, chunk_cache_mem_size=cacheSize, mode='w')
+  h5fout = h5py.File('fitresults_%i.hdf5' % seed, rdcc_nbytes=cacheSize, mode='w')
 
   #copy some info to output file
   f.copy('hreggroups',h5fout)

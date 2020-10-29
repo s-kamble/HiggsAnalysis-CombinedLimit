@@ -707,7 +707,7 @@ for output, outputname in zip(outputs,outputnames):
 #polynomial regularization
 if options.doRegularization:
   print("polynomial regularization")
-  for firstorder, lastorder, names, bincenters in zip(poly1dreggroupfirstorder, poly1dreggrouplastorder,  poly1dreggroupnames, poly1dreggroupbincenters):
+  for group, firstorder, lastorder, names, bincenters in zip(poly1dreggroups, poly1dreggroupfirstorder, poly1dreggrouplastorder,  poly1dreggroupnames, poly1dreggroupbincenters):
 
     # values to regularize
     reglist = []
@@ -733,12 +733,20 @@ if options.doRegularization:
     # quantities to be regularized
     polycoeffs = tf.matmul(pregAinv, reg)
     polycoeffs = tf.squeeze(polycoeffs, axis=-1)
+    polycoeffs = tf.identity(polycoeffs, group)
     
     # constraint term
     lreg = taureg*tf.reduce_sum(regweights*tf.square(polycoeffs))
     
     l += lreg
     lfull += lreg
+    
+    # add polynomial coefficients to output
+    outputs.append(polycoeffs)
+    outputname = []
+    for i in range(nterms):
+      outputname.append("%s_polycoeff_%i" % (group, i))
+    outputnames.append(outputname)
 
 nthreadshess = options.nThreads
 if nthreadshess<0:

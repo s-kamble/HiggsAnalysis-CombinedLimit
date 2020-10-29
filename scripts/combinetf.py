@@ -119,6 +119,11 @@ helmetagroups = f['hhelmetagroups'][...]
 helmetagroupidxs = f['hhelmetagroupidxs'][...]
 reggroups = f['hreggroups'][...]
 reggroupidxs = f['hreggroupidxs'][...]
+poly1dreggroups = f['hpoly1dreggroups'][...]
+poly1dreggroupfirstorder = f['hpoly1dreggroupfirstorder'][...]
+poly1dreggrouplastorder = f['hpoly1dreggrouplastorder'][...]
+poly1dreggroupnames = f['hpoly1dreggroupnames'][...]
+poly1dreggroupbincenters = f['hpoly1dreggroupbincenters'][...]
 noigroups = f['hnoigroups'][...]
 noigroupidxs = f['hnoigroupidxs'][...]
 maskedchans = f['hmaskedchans'][...]
@@ -154,7 +159,9 @@ nchargemetagroups = len(chargemetagroups)
 nratiometagroups = len(ratiometagroups)
 nhelmetagroups = len(helmetagroups)
 nreggroups = len(reggroups)
+npoly1dreggroups = len(poly1dreggroups)
 nnoigroups = len(noigroups)
+
 
 
 
@@ -447,6 +454,8 @@ if options.POIMode == "mu":
 outputnames.append(outputname)
   
 taureg = -1.
+if options.doRegularization:
+  taureg = options.regularizationTau
   
 if options.POIMode == "mu":  
   if nbinsmasked>0:
@@ -657,7 +666,6 @@ if options.POIMode == "mu":
     else:
       regsource = pmaskedexp
     
-    taureg = options.regularizationTau
     lregs = tf.zeros_like(l)
     for reggroupidx in reggroupidxs:
       #construct matrix to form discrete 2nd derivatives
@@ -689,6 +697,48 @@ if nnoigroups > 0:
   for idx in noigroupidxs:
     outputname.append("%s_noi" % systs[idx])
   outputnames.append(outputname)
+  
+  
+outputmap = {}
+for output, outputname in zip(outputs,outputnames):
+  for iout,name in enumerate(outputname):
+    outputmap[name] = output[iout]
+
+#polynomial regularization
+if options.doRegularization:
+  print("polynomial regularization")
+  for firstorder, lastorder, names, bincenters in zip(poly1dreggroupfirstorder, poly1dreggrouplastorder,  poly1dreggroupnames, poly1dreggroupbincenters):
+
+    # values to regularize
+    reglist = []
+    for name in names:
+      reglist.append(outputmap[name])
+    reg = tf.stack(reglist)
+    reg = tf.expand_dims(reg, axis=-1)
+    
+    nterms = bincenters.shape[0]
+    
+    # matrix of polynomial terms
+    pregA = np.zeros((nterms,nterms), dtype=dtype)
+    for i in range(nterms):
+      pregA[:,i] = bincenters**i
+    
+    pregAinv = np.linalg.inv(pregA)
+    
+    # mask for terms to constrain
+    regweights = np.ones((nterms,), dtype=dtype)
+    regweights[firstorder:lastorder+1] = 0.
+    
+    # solve for polynomial coefficients corresponding to current value of
+    # quantities to be regularized
+    polycoeffs = tf.matmul(pregAinv, reg)
+    polycoeffs = tf.squeeze(polycoeffs, axis=-1)
+    
+    # constraint term
+    lreg = taureg*tf.reduce_sum(regweights*tf.square(polycoeffs))
+    
+    l += lreg
+    lfull += lreg
 
 nthreadshess = options.nThreads
 if nthreadshess<0:
@@ -1410,7 +1460,8 @@ for itoy in range(ntoys):
     if options.randomizeStart:
       sess.run(asimovrandomizestart)
     else:
-      dofit = False
+      if not options.doRegularization:
+        dofit = False
   elif options.toys == 0:
     print("Running fit to observed data")
     sess.run(dataobsassign)

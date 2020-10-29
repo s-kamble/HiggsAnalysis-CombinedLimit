@@ -65,7 +65,6 @@ if not options.fileName.endswith(".pkl"):
     DC = parseCard(file, options)
 
 else:
-    
     file = open(options.fileName, "rb")
     import pickle
     DC = pickle.load(file)
@@ -219,6 +218,18 @@ for igroup,group in enumerate(DC.regGroups):
   for proc in DC.regGroups[group]:
     reggroupidx.append(procs.index(proc))
   reggroupidxs.append(reggroupidx)
+  
+poly1dreggroups = []
+poly1dreggroupfirstorder = []
+poly1dreggrouplastorder = []
+poly1dreggroupnames = []
+poly1dreggroupbincenters = []
+for group in DC.poly1DRegGroups:
+  poly1dreggroups.append(group)
+  poly1dreggroupfirstorder.append(DC.poly1DRegGroups[group]["firstorder"])
+  poly1dreggrouplastorder.append(DC.poly1DRegGroups[group]["lastorder"])
+  poly1dreggroupnames.append(DC.poly1DRegGroups[group]["names"])
+  poly1dreggroupbincenters.append(DC.poly1DRegGroups[group]["bincenters"])
   
 #list of groups of systematics to be treated as additional outputs for impacts, etc (aka "nuisances of interest")
 noigroups = []
@@ -686,6 +697,21 @@ hreggroups[...] = reggroups
 
 hreggroupidxs = f.create_dataset("hreggroupidxs", [len(reggroupidxs)], dtype=h5py.special_dtype(vlen=np.dtype('int32')), compression="gzip")
 hreggroupidxs[...] = reggroupidxs
+
+hpoly1dreggroups = f.create_dataset("hpoly1dreggroups", [len(poly1dreggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+hpoly1dreggroups[...] = poly1dreggroups
+
+hpoly1dreggroupfirstorder = f.create_dataset("hpoly1dreggroupfirstorder", [len(poly1dreggroupfirstorder)], dtype='int32', compression="gzip")
+hpoly1dreggroupfirstorder[...] = poly1dreggroupfirstorder
+
+hpoly1dreggrouplastorder = f.create_dataset("hpoly1dreggrouplastorder", [len(poly1dreggrouplastorder)], dtype='int32', compression="gzip")
+hpoly1dreggrouplastorder[...] = poly1dreggrouplastorder
+
+hpoly1dreggroupnames = f.create_dataset("hpoly1dreggroupnames", [len(poly1dreggroupnames)], dtype=h5py.special_dtype(vlen="S256"), compression="gzip")
+hpoly1dreggroupnames[...] = poly1dreggroupnames
+
+hpoly1dreggroupbincenters = f.create_dataset("hpoly1dreggroupbincenters", [len(poly1dreggroupbincenters)], dtype=h5py.special_dtype(vlen=np.dtype('float64')), compression="gzip")
+hpoly1dreggroupbincenters[...] = poly1dreggroupbincenters
 
 hnoigroups = f.create_dataset("hnoigroups", [len(noigroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
 hnoigroups[...] = noigroups

@@ -56,12 +56,13 @@ class Datacard():
         self.chargeGroups = OrderedDict()
         self.polGroups = OrderedDict()
         self.helGroups = OrderedDict()
-	self.sumGroups = OrderedDict()
-	self.chargeMetaGroups = OrderedDict()
-	self.ratioMetaGroups = OrderedDict()
-	self.regGroups = OrderedDict()
+        self.sumGroups = OrderedDict()
+        self.chargeMetaGroups = OrderedDict()
+        self.ratioMetaGroups = OrderedDict()
+        self.regGroups = OrderedDict()
         self.helMetaGroups = OrderedDict()
-	self.noiGroups = OrderedDict()
+        self.noiGroups = OrderedDict()
+        self.poly1DRegGroups = OrderedDict()
 
     def print_structure(self):
         """

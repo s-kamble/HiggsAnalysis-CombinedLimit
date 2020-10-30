@@ -124,6 +124,13 @@ poly1dreggroupfirstorder = f['hpoly1dreggroupfirstorder'][...]
 poly1dreggrouplastorder = f['hpoly1dreggrouplastorder'][...]
 poly1dreggroupnames = f['hpoly1dreggroupnames'][...]
 poly1dreggroupbincenters = f['hpoly1dreggroupbincenters'][...]
+poly2dreggroups = f['hpoly2dreggroups'][...]
+poly2dreggroupfirstorder = f['hpoly2dreggroupfirstorder'][...]
+poly2dreggrouplastorder = f['hpoly2dreggrouplastorder'][...]
+poly2dreggroupfullorder = f['hpoly2dreggroupfullorder'][...]
+poly2dreggroupnames = f['hpoly2dreggroupnames'][...]
+poly2dreggroupbincenters0 = f['hpoly2dreggroupbincenters0'][...]
+poly2dreggroupbincenters1 = f['hpoly2dreggroupbincenters1'][...]
 noigroups = f['hnoigroups'][...]
 noigroupidxs = f['hnoigroupidxs'][...]
 maskedchans = f['hmaskedchans'][...]
@@ -160,6 +167,7 @@ nratiometagroups = len(ratiometagroups)
 nhelmetagroups = len(helmetagroups)
 nreggroups = len(reggroups)
 npoly1dreggroups = len(poly1dreggroups)
+npoly2dreggroups = len(poly2dreggroups)
 nnoigroups = len(noigroups)
 
 
@@ -706,7 +714,6 @@ for output, outputname in zip(outputs,outputnames):
 
 #polynomial regularization
 if options.doRegularization:
-  print("polynomial regularization")
   for group, firstorder, lastorder, names, bincenters in zip(poly1dreggroups, poly1dreggroupfirstorder, poly1dreggrouplastorder,  poly1dreggroupnames, poly1dreggroupbincenters):
 
     # values to regularize
@@ -745,7 +752,59 @@ if options.doRegularization:
     outputs.append(polycoeffs)
     outputname = []
     for i in range(nterms):
-      outputname.append("%s_polycoeff_%i" % (group, i))
+      outputname.append("%s_polycoeff1d_%i" % (group, i))
+    outputnames.append(outputname)
+  
+  for group, firstorder, lastorder, fullorder, names, bincenters0, bincenters1 in zip(poly2dreggroups, poly2dreggroupfirstorder, poly2dreggrouplastorder, poly2dreggroupfullorder, poly2dreggroupnames, poly2dreggroupbincenters0, poly2dreggroupbincenters1):
+    
+    #values to regularize
+    reglist = []
+    for name in names:
+      reglist.append(outputmap[name])
+    reg = tf.stack(reglist)
+    reg = tf.expand_dims(reg, axis=-1)
+    
+    nterms = fullorder + 1
+    ntermsfull = np.prod(nterms)
+    
+    # matrix of polynomial terms and term orders
+    pregA = np.zeros((ntermsfull, nterms[0], nterms[1]), dtype=dtype)
+    orders = np.zeros((nterms[0], nterms[1], 2), dtype=np.int32)
+    for i in range(nterms[0]):
+      for j in range(nterms[1]):
+        pregA[:, i,j] = bincenters0**i*bincenters1**j
+        orders[i,j,0] = i
+        orders[i,j,1] = j
+        
+    pregA = np.reshape(pregA, (ntermsfull, ntermsfull))
+    orders = np.reshape(orders, (ntermsfull, 2))
+    
+    pregAinv = np.linalg.inv(pregA)
+    
+    # mask for terms to constrain
+    # terms are kept unconstrained if orders match for either dimension
+    regweights = np.ones((nterms[0], nterms[1]), dtype=dtype)
+    regweights[firstorder[0]:lastorder[0]+1] = 0.
+    regweights[:,firstorder[1]:lastorder[1]+1] = 0.
+    
+    regweights = np.reshape(regweights, (ntermsfull,))
+        
+    # solve for polynomial coefficients corresponding to current value of
+    # quantities to be regularized
+    polycoeffs = tf.matmul(pregAinv, reg)
+    polycoeffs = tf.squeeze(polycoeffs, axis=-1)
+    polycoeffs = tf.identity(polycoeffs, group)
+    
+    lreg = taureg*tf.reduce_sum(regweights*tf.square(polycoeffs))
+    
+    l += lreg
+    lfull += lreg
+    
+    # add polynomial coefficients to output
+    outputs.append(polycoeffs)
+    outputname = []
+    for order in orders:
+      outputname.append("%s_polycoeff2d_%i_%i" % (group, order[0], order[1]))
     outputnames.append(outputname)
 
 nthreadshess = options.nThreads

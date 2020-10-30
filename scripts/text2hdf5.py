@@ -231,6 +231,27 @@ for group in DC.poly1DRegGroups:
   poly1dreggroupnames.append(DC.poly1DRegGroups[group]["names"])
   poly1dreggroupbincenters.append(DC.poly1DRegGroups[group]["bincenters"])
   
+poly2dreggroups = []
+poly2dreggroupfirstorder = []
+poly2dreggrouplastorder = []
+poly2dreggroupfullorder = []
+poly2dreggroupnames = []
+poly2dreggroupbincenters0 = []
+poly2dreggroupbincenters1 = []
+for group in DC.poly2DRegGroups:
+  poly2dreggroups.append(group)
+  poly2dreggroupfirstorder.append(DC.poly2DRegGroups[group]["firstorder"])
+  poly2dreggrouplastorder.append(DC.poly2DRegGroups[group]["lastorder"])
+  poly2dreggroupfullorder.append(DC.poly2DRegGroups[group]["fullorder"])
+  poly2dreggroupnames.append(DC.poly2DRegGroups[group]["names"])
+  bincenters0 = []
+  bincenters1 = []
+  for bincenter in DC.poly2DRegGroups[group]["bincenters"]:
+    bincenters0.append(bincenter[0])
+    bincenters1.append(bincenter[1])
+  poly2dreggroupbincenters0.append(bincenters0)
+  poly2dreggroupbincenters1.append(bincenters1)
+  
 #list of groups of systematics to be treated as additional outputs for impacts, etc (aka "nuisances of interest")
 noigroups = []
 noigroupidxs = []
@@ -712,6 +733,27 @@ hpoly1dreggroupnames[...] = poly1dreggroupnames
 
 hpoly1dreggroupbincenters = f.create_dataset("hpoly1dreggroupbincenters", [len(poly1dreggroupbincenters)], dtype=h5py.special_dtype(vlen=np.dtype('float64')), compression="gzip")
 hpoly1dreggroupbincenters[...] = poly1dreggroupbincenters
+
+hpoly2dreggroups = f.create_dataset("hpoly2dreggroups", [len(poly2dreggroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
+hpoly2dreggroups[...] = poly2dreggroups
+
+hpoly2dreggroupfirstorder = f.create_dataset("hpoly2dreggroupfirstorder", [len(poly2dreggroupfirstorder),2], dtype='int32', compression="gzip")
+hpoly2dreggroupfirstorder[...] = poly2dreggroupfirstorder
+
+hpoly2dreggrouplastorder = f.create_dataset("hpoly2dreggrouplastorder", [len(poly2dreggrouplastorder),2], dtype='int32', compression="gzip")
+hpoly2dreggrouplastorder[...] = poly2dreggrouplastorder
+
+hpoly2dreggroupfullorder = f.create_dataset("hpoly2dreggroupfullorder", [len(poly2dreggroupfullorder),2], dtype='int32', compression="gzip")
+hpoly2dreggroupfullorder[...] = poly2dreggroupfullorder
+
+hpoly2dreggroupnames = f.create_dataset("hpoly2dreggroupnames", [len(poly2dreggroupnames)], dtype=h5py.special_dtype(vlen="S256"), compression="gzip")
+hpoly2dreggroupnames[...] = poly2dreggroupnames
+
+hpoly2dreggroupbincenters0 = f.create_dataset("hpoly2dreggroupbincenters0", [len(poly2dreggroupbincenters0)], dtype=h5py.special_dtype(vlen=np.dtype('float64')), compression="gzip")
+hpoly2dreggroupbincenters0[...] = poly2dreggroupbincenters0
+
+hpoly2dreggroupbincenters1 = f.create_dataset("hpoly2dreggroupbincenters1", [len(poly2dreggroupbincenters1)], dtype=h5py.special_dtype(vlen=np.dtype('float64')), compression="gzip")
+hpoly2dreggroupbincenters1[...] = poly2dreggroupbincenters1
 
 hnoigroups = f.create_dataset("hnoigroups", [len(noigroups)], dtype=h5py.special_dtype(vlen=str), compression="gzip")
 hnoigroups[...] = noigroups

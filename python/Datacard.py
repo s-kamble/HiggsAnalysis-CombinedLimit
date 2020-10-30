@@ -63,6 +63,7 @@ class Datacard():
         self.helMetaGroups = OrderedDict()
         self.noiGroups = OrderedDict()
         self.poly1DRegGroups = OrderedDict()
+        self.poly2DRegGroups = OrderedDict()
 
     def print_structure(self):
         """

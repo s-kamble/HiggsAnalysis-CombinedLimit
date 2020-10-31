@@ -1627,9 +1627,13 @@ for itoy in range(ntoys):
       evs = None
       UTval = None
       
-    if isposdefval and edmval > -edmtol and mineigvalinv > 0.:
+    if isposdefval and edmval > -edmtol:
       status = 0
     else:
+      status = 1
+      
+    #additional check when using non-profiled nuisances
+    if nsystnoprofile > 0 and mineigvalinv <= 0.:
       status = 1
     
     print("status = %i, errstatus = %i, nllval = %f, nllvalfull = %f, edmval = %e, mineigval = %e, mineigvalinv = %e" % (status,errstatus,nllval,nllvalfull,edmval,mineigval,mineigvalinv))  

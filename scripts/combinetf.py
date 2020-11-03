@@ -860,7 +860,10 @@ mineigv = tf.reduce_min(eigvals)
 UT = tf.transpose(eigvects)
 isposdef = mineigv > 0.
 gradcol = tf.reshape(grad[:nprof],[-1,1])
-edm = 0.5*tf.matmul(tf.matmul(gradcol,invhessianp,transpose_a=True),gradcol)
+if nsystnoprofile > 0:
+  edm = 0.5*tf.matmul(tf.matmul(gradcol,invhessianp,transpose_a=True),gradcol)
+else:
+  edm = 0.5*tf.matmul(gradcol, tf.linalg.solve(hessianp, gradcol), transpose_a = True)
 
 mineigvinv = tf.reduce_min(tf.self_adjoint_eigvals(invhessian))
 

@@ -78,6 +78,7 @@ parser.add_option("","--doh5Output", default=False, action='store_true', help="s
 parser.add_option("","--doSmoothnessTest", default=False, action='store_true', help="run statistical smoothness test on absolute cross sections based on polynomial fits to regularization groups")
 parser.add_option("","--smoothnessTestMaxOrder", default=4, type=int, help="maximum polynomial order for smoothness test")
 parser.add_option("","--useExpNonProfiledErrs", default=False, action='store_true', help="use expected uncertainties for non-profiled nuisances")
+parser.add_option("","--yieldProtectionCutoff", default=-1., type=float, help="cutoff used to protect total yield from negative values.")
 (options, args) = parser.parse_args()
 
 if len(args) == 0:
@@ -333,6 +334,11 @@ pmaskedexp = rnorm*tf.reduce_sum(snormnormmasked,axis=0)
 maskedexp = nexpfullcentral[nbins:]
 
 nexpcentral = nexpfullcentral[:nbins]
+
+# protection for negative yields
+yp = options.yieldProtectionCutoff
+if yp > 0.:
+  nexpcentral = tf.where(tf.greater_equal(nexpcentral, yp), nexpcentral, yp*tf.exp(nexpcentral/yp-1.))
 
 if options.binByBinStat:
   #beta = (nobs + kstat - 1.)/(nexpcentral+kstat)

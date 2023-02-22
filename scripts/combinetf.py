@@ -70,7 +70,7 @@ parser.add_option("","--computeHistErrors", default=False, action='store_true', 
 parser.add_option("","--binByBinStat", default=False, action='store_true', help="add bin-by-bin statistical uncertainties on templates (using Barlow and Beeston 'lite' method")
 parser.add_option("","--correlateXsecStat", default=False, action='store_true', help="Assume that cross sections in masked channels are correlated with expected values in templates (ie computed from the same MC events)")
 parser.add_option("","--postfix", default="",type="string", help="add _<postfix> to output root file")
-parser.add_option("", "--outputDir", default="",type="string", help="Specify folder for output file (it is created if not existing). If SAME is given, use same folder as input file")
+parser.add_option("","--outputDir", default="",type="string", help="Specify folder for output file (it is created if not existing). If SAME is given, use same folder as input file")
 parser.add_option("","--doImpacts", default=False, action='store_true', help="Compute impacts on POIs per nuisance parameter and per-nuisance parameter group")
 parser.add_option("","--useSciPyMinimizer", default=False, action='store_true', help="Use SciPy constrained trust region minimizer for instead of native tensorflow one")
 parser.add_option("","--doRegularization", default=False, action='store_true', help="Use curvature-based regularization if defined in datacard")
@@ -82,6 +82,7 @@ parser.add_option("","--doSmoothnessTest", default=False, action='store_true', h
 parser.add_option("","--smoothnessTestMaxOrder", default=4, type=int, help="maximum polynomial order for smoothness test")
 parser.add_option("","--useExpNonProfiledErrs", default=False, action='store_true', help="use expected uncertainties for non-profiled nuisances")
 parser.add_option("","--yieldProtectionCutoff", default=-1., type=float, help="cutoff used to protect total yield from negative values.")
+parser.add_option("","--noHessian", default=False, action='store_true', help="Skip calculation of hessian matrix")
 (options, args) = parser.parse_args()
 
 if len(args) == 0:
@@ -1640,21 +1641,26 @@ for itoy in range(ntoys):
     #get fit output
     xval, outvalss, thetavals, theta0vals, nllval, nllvalfull = sess.run([x,outputs,theta,theta0,l,lfull])
     dnllval = 0.
-    #get inverse hessians for error calculation (can fail if matrix is not invertible)
-    try:
-      #invhessval,mineigval,isposdefval,edmval,invhessoutvals = sess.run([invhessian,mineigv,isposdef,edm,invhessianouts])
-      hessval,invhessval,mineigval,isposdefval,edmval,invhessoutvals,evs,UTval,mineigvalinv = sess.run([hessian,invhessian,mineigv,isposdef,edm,invhessianouts,eigvals,UT,mineigvinv])
-      errstatus = 0
-    except:
-      edmval = -99.
-      isposdefval = False
-      mineigval = -99.
-      mineigvalinv = -99.
-      invhessoutvals = outvalss
-      errstatus = 1
-      evs = None
-      UTval = None
-      
+
+    # set default values
+    edmval = -99.
+    isposdefval = False
+    mineigval = -99.
+    mineigvalinv = -99.
+    invhessoutvals = outvalss
+    errstatus = 1
+    evs = None
+    UTval = None      
+
+    if not options.noHessian:
+      #get inverse hessians for error calculation (can fail if matrix is not invertible)
+      try:
+        #invhessval,mineigval,isposdefval,edmval,invhessoutvals = sess.run([invhessian,mineigv,isposdef,edm,invhessianouts])
+        hessval,invhessval,mineigval,isposdefval,edmval,invhessoutvals,evs,UTval,mineigvalinv = sess.run([hessian,invhessian,mineigv,isposdef,edm,invhessianouts,eigvals,UT,mineigvinv])
+        errstatus = 0
+      except:
+        pass
+
     if isposdefval and edmval > -edmtol:
       status = 0
     else:
@@ -1667,7 +1673,7 @@ for itoy in range(ntoys):
     print("status = %i, errstatus = %i, nllval = %f, nllvalfull = %f, edmval = %e, mineigval = %e, mineigvalinv = %e" % (status,errstatus,nllval,nllvalfull,edmval,mineigval,mineigvalinv))  
     
     edmtolretry = 1e-3
-    if isposdefval and edmval < edmtolretry and edmval>=0.:
+    if (isposdefval and edmval < edmtolretry and edmval>=0.) or options.noHessian:
       break
   
   if errstatus==0:

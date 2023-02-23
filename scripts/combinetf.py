@@ -83,6 +83,7 @@ parser.add_option("","--smoothnessTestMaxOrder", default=4, type=int, help="maxi
 parser.add_option("","--useExpNonProfiledErrs", default=False, action='store_true', help="use expected uncertainties for non-profiled nuisances")
 parser.add_option("","--yieldProtectionCutoff", default=-1., type=float, help="cutoff used to protect total yield from negative values.")
 parser.add_option("","--noHessian", default=False, action='store_true', help="Skip calculation of hessian matrix")
+parser.add_option("","--saturated", default=False, action='store_true', help="Calculate negative log likelihood value for saturated model (for using it in goodness of fit tests)")
 (options, args) = parser.parse_args()
 
 if len(args) == 0:
@@ -426,6 +427,15 @@ lognexp = tf.log(nexpsafe)
 nexpnom = tf.Variable(nexp, trainable=False, name="nexpnom")
 nexpnomsafe = tf.where(nobsnull, tf.ones_like(nobs), nexpnom)
 lognexpnom = tf.log(nexpnomsafe)
+
+if options.saturated:
+  #saturated model  
+  nobsnull = tf.equal(nobs,tf.zeros_like(nobs))
+
+  nobssafe = tf.where(nobsnull, tf.ones_like(nobs), nobs)
+  lognobs = tf.log(nobssafe)
+
+  lsaturated = tf.reduce_sum(-nobs*lognobs + nobs, axis=-1)
 
 #final likelihood computation
 
@@ -1154,6 +1164,11 @@ tree.Branch('ndofpartial',tndofpartial,'ndofpartial/I')
 
 ttaureg = array('d',[0.])
 tree.Branch('taureg',ttaureg,'taureg/D')
+
+if options.saturated:
+  # add information of saturated model
+  tsatnllvalfull = array('d',[0.])
+  tree.Branch('satnllvalfull',tsatnllvalfull,'satnllvalfull/D')
 
 maxorder = options.smoothnessTestMaxOrder
 tsmoothchisqs = []
@@ -1897,6 +1912,10 @@ for itoy in range(ntoys):
     dxvaldown = -(xvalminosdown[erridx]-outthetaval[erridx])
     minoserrsdown[erroutidx] = dxvaldown
         
+  if options.saturated:
+    nllvalsaturated = sess.run(lsaturated) 
+    tsatnllvalfull[0] = nllvalsaturated
+
   tstatus[0] = status
   terrstatus[0] = errstatus
   tedmval[0] = edmval

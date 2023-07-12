@@ -47,7 +47,7 @@ if doplotting:
 parser = OptionParser(usage="usage: %prog [options] datacard.txt -o output \nrun with --help to get list of options")
 parser.add_option("-o","--output", default=None, type="string", help="output file name")
 parser.add_option("-t","--toys", default=0, type=int, help="run a given number of toys, 0 fits the data (default), and -1 fits the asimov toy")
-parser.add_option("","--toysFrequentist", default=True, action='store_true', help="run frequentist-type toys by randomizing constraint minima")
+parser.add_option("","--toysFrequentist", default=False, action='store_true', help="run frequentist-type toys by randomizing constraint minima")
 parser.add_option("","--bypassFrequentistFit", default=True, action='store_true', help="bypass fit to data when running frequentist toys to get toys based on prefit expectations")
 parser.add_option("","--bootstrapData", default=False, action='store_true', help="throw toys directly from observed data counts rather than expectation from templates")
 parser.add_option("","--randomizeStart", default=False, action='store_true', help="randomize starting values for fit (only implemented for asimov dataset for now")
@@ -1809,7 +1809,7 @@ for itoy in range(ntoys):
       print([outname,nout,chisq])
       outchisqs.append(chisq)
       
-      if not options.toys > 0:
+      if not options.toys > 1:
         variances2D     = parameterErrors[np.newaxis].T * parameterErrors
         correlationMatrix = np.divide(invhessoutval, variances2D)
         array2hist(correlationMatrix, correlationHist)
@@ -1831,8 +1831,15 @@ for itoy in range(ntoys):
   if options.saveHists and not options.toys > 1:
     postfithists = fillHists('postfit')
     
-  if options.doImpacts and not options.toys > 0:
-    dName = 'asimov' if options.toys < 0 else 'data fit'
+  if options.doImpacts and not options.toys > 1:
+    
+    if options.toys < 0:
+      dName = 'asimov' 
+    elif options.toys > 0:
+      dName = 'toy fit'
+    else:
+      dName = 'data fit'
+
     nuisanceimpactoutvals, nuisancegroupimpactoutvals = sess.run([nuisanceimpactouts,nuisancegroupimpactouts])
     for output, outputname, nuisanceimpactoutval, nuisancegroupimpactoutval in zip(outputs,outputnames,nuisanceimpactoutvals,nuisancegroupimpactoutvals):
       outname = ":".join(output.name.split(":")[:-1])

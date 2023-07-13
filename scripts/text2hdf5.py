@@ -806,7 +806,7 @@ nbytes += writeFlatInChunks(data_obs, f, "hdata_obs", maxChunkBytes = chunkSize)
 data_obs = None
 
 if options.theoryFit:
-    full_cov = data_cov if not options.addMCstat else np.add(data_cov,sumw2)
+    full_cov = data_cov if not options.addMCstat else np.add(data_cov,np.diag(sumw2))
     nbytes += writeFlatInChunks(np.linalg.inv(full_cov), f, "hdata_cov_inv", maxChunkBytes = chunkSize)
     data_cov = None
 

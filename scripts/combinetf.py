@@ -93,7 +93,7 @@ if len(args) == 0:
 
 if options.chisqFit and options.theoryFit:
   raise Exception('options "--theoryFit" and "--chisqFit" cannot be simultaneously used')
-    
+
 seed = options.seed
 print(seed)
 np.random.seed(seed)
@@ -152,7 +152,7 @@ hdata_obs = f['hdata_obs']
 sparse = not 'hnorm' in f
 
 if options.theoryFit:
-  hdata_cov = f['hdata_cov']
+  hdata_cov_inv = f['hdata_cov_inv']
 
 if sparse:
   hnorm_sparse = f['hnorm_sparse']
@@ -202,7 +202,7 @@ nsystgroupsfull = len(systgroupsfull)
 constraintweights = maketensor(hconstraintweights)
 data_obs = maketensor(hdata_obs)
 if options.theoryFit:
-  data_cov = maketensor(hdata_cov)
+  data_cov_inv = maketensor(hdata_cov_inv)
 
 if options.binByBinStat:
   hkstat = f['hkstat']
@@ -444,7 +444,7 @@ lognexpnom = tf.log(nexpnomsafe)
 
 if options.theoryFit or options.chisqFit:
   residual = tf.reshape(nobs-nexp,[-1,1]) #chi2 residual
-  cov_inv = tf.matrix_inverse(data_cov) if options.theoryFit else tf.matrix_inverse(tf.diag(nobs)) # provided covariance (unfolded) or Poisson variance (detector-level)
+  cov_inv = data_cov_inv if options.theoryFit else tf.matrix_inverse(tf.diag(nobs)) # provided covariance (unfolded) or Poisson variance (detector-level)
   ln = lnfull = 0.5 * tf.reduce_sum(tf.matmul(residual,tf.matmul(cov_inv,residual),transpose_a=True))
 else: #poisson-likelihood fit
   lnfull = tf.reduce_sum(-nobs*lognexp + nexp, axis=-1) #poisson term

@@ -46,7 +46,7 @@ parser.add_option("", "--postfix", default="",type="string", help="add _<postfix
 parser.add_option("", "--clipSystVariations", type=float, default=-1.,  help="Clipping of syst variations (all processes)")
 parser.add_option("", "--clipSystVariationsSignal", type=float, default=-1.,  help="Clipping of syst variations (signal processes)")
 parser.add_option("", "--theoryFit", default=False, action='store_true',  help="Fit theory to unfolded cross section (e.g. mW extraction)")
-parser.add_option("","--addMCstat", default=False, action='store_true', help="add MC stat uncertainty to covariance matrix (compatible with theory fit only)")
+parser.add_option("","--noMCstat", default=False, action='store_true', help="add MC stat uncertainty to covariance matrix (compatible with theory fit only)")
 (options, args) = parser.parse_args()
 
 if len(args) == 0:
@@ -55,8 +55,8 @@ if len(args) == 0:
 
 options.fileName = args[0]
 
-if options.addMCstat and not options.theoryFit:
-  raise Exception('options "--addMCstat" can only be used in combination with "--theoryFit"')
+if options.noMCstat and not options.theoryFit:
+  raise Exception('options "--noMCstat" can only be used in combination with "--theoryFit"')
 
 
 if not options.fileName.endswith(".pkl"):
@@ -806,7 +806,7 @@ nbytes += writeFlatInChunks(data_obs, f, "hdata_obs", maxChunkBytes = chunkSize)
 data_obs = None
 
 if options.theoryFit:
-    full_cov = data_cov if not options.addMCstat else np.add(data_cov,np.diag(sumw2))
+    full_cov = data_cov if options.noMCstat else np.add(data_cov,np.diag(sumw2))
     nbytes += writeFlatInChunks(np.linalg.inv(full_cov), f, "hdata_cov_inv", maxChunkBytes = chunkSize)
     data_cov = None
 

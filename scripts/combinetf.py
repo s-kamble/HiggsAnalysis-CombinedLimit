@@ -93,6 +93,8 @@ if len(args) == 0:
 
 if options.chisqFit and options.theoryFit:
   raise Exception('options "--theoryFit" and "--chisqFit" cannot be simultaneously used')
+if (options.chisqFit or options.theoryFit) and options.binByBinStat:
+  raise Exception('option "--binByBinStat" currently not supported for options "--theoryFit" and "--chisqFit"')
 
 seed = options.seed
 print(seed)

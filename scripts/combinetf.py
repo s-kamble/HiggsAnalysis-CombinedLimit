@@ -86,7 +86,7 @@ parser.add_option("","--noHessian", default=False, action='store_true', help="Sk
 parser.add_option("","--saturated", default=False, action='store_true', help="Calculate negative log likelihood value for saturated model (for using it in goodness of fit tests)")
 parser.add_option("", "--theoryFit", default=False, action='store_true',  help="Fit theory to unfolded cross section (e.g. mW extraction)")
 parser.add_option("", "--chisqFit", default=False, action='store_true',  help="Perform chi-square fit instead of likelihood fit")
-
+parser.add_option("", "--doJacobian", default = False, action='store_true', help="Compute and store Jacobian of expected event counts with respect to fit parameters")
 (options, args) = parser.parse_args()
 
 if len(args) == 0:
@@ -1047,6 +1047,10 @@ if options.saveHists:
   nexpfullerr = experr(nexpfull,invhessianchol)
   nexpsigerr = experr(nexpsig, invhessianchol)
   nexpbkgerr = experr(nexpbkg, invhessianchol)
+
+  # compute jacobian for statistical tests
+  nexpfulljac = jacobian(nexpfullcentral,x,gate_gradients=True,parallel_iterations=nthreadshess,back_prop=False)
+
   
 lb = np.concatenate((-np.inf*np.ones([npoi],dtype=dtype),-np.inf*np.ones([nsyst],dtype=dtype)),axis=0)
 ub = np.concatenate((np.inf*np.ones([npoi],dtype=dtype),np.inf*np.ones([nsyst],dtype=dtype)),axis=0)
@@ -1510,6 +1514,16 @@ def fillHists(tag, witherrors=options.computeHistErrors):
   expbkgHist = ROOT.TH1D('expbkg_%s' % tag,'',nbinsfull,-0.5, float(nbinsfull)-0.5)
   hists.append(expbkgHist)
   array2hist(nexpbkgval,expbkgHist, errors=nexpbkgerrval)
+
+  if tag=="postfit" and options.doJacobian:
+      nexpfulljacval = sess.run(nexpfulljac)
+
+      nx = npoi + nsyst
+
+      expfulljacHist = ROOT.TH2D('expfulljac_%s' % tag, '', nbinsfull, -0.5, float(nbinsfull)-0.5, nx, -0.5, float(nx)-0.5)
+      hists.append(expfulljacHist)
+      array2hist(nexpfulljacval, expfulljacHist)
+
   
   for iproc,proc in enumerate(procs):
     expHist = ROOT.TH1D('expproc_%s_%s' % (proc,tag),'',nbinsfull,-0.5, float(nbinsfull)-0.5)

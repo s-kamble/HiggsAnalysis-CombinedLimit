@@ -47,7 +47,7 @@ if doplotting:
 parser = OptionParser(usage="usage: %prog [options] datacard.txt -o output \nrun with --help to get list of options")
 parser.add_option("-o","--output", default=None, type="string", help="output file name")
 parser.add_option("-t","--toys", default=0, type=int, help="run a given number of toys, 0 fits the data (default), and -1 fits the asimov toy")
-parser.add_option("","--toysFrequentist", default=False, action='store_true', help="run frequentist-type toys by randomizing constraint minima")
+parser.add_option("","--toysBayesian", default=False, action='store_true', help="run bayesian-type toys (otherwise frequentist)")
 parser.add_option("","--bypassFrequentistFit", default=True, action='store_true', help="bypass fit to data when running frequentist toys to get toys based on prefit expectations")
 parser.add_option("","--bootstrapData", default=False, action='store_true', help="throw toys directly from observed data counts rather than expectation from templates")
 parser.add_option("","--randomizeStart", default=False, action='store_true', help="randomize starting values for fit (only implemented for asimov dataset for now")
@@ -1574,7 +1574,7 @@ if nsystnoprofile>0. and options.useExpNonProfiledErrs:
     ciexpv = sess.run(ci)
   
 #prefit to data if needed
-if options.toys>0 and options.toysFrequentist and not options.bypassFrequentistFit:  
+if options.toys>0 and not options.toysBayesian and not options.bypassFrequentistFit:  
   sess.run(dataobsassign)
   sess.run(nexpnomassign)
   minimize()
@@ -1609,7 +1609,7 @@ for itoy in range(ntoys):
     sess.run(dataobsassign)
   else:
     print("Running toy %i" % itoy)  
-    if options.toysFrequentist:
+    if not options.toysBayesian:
       #randomize nuisance constraint minima
       sess.run(frequentistassign)
     else:
@@ -1626,7 +1626,7 @@ for itoy in range(ntoys):
       
     if options.bootstrapData:
       #randomize from observed data
-      if options.binByBinStat and options.toysFrequentist:
+      if options.binByBinStat and not options.toysBayesian:
         raise Exception("Since bin-by-bin statistical uncertainties are always propagated in a bayesian manner, they cannot currently be consistently\
           propagated for bootstrap toys")
       sess.run(dataobsassign)

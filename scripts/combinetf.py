@@ -84,11 +84,17 @@ parser.add_option("","--useExpNonProfiledErrs", default=False, action='store_tru
 parser.add_option("","--yieldProtectionCutoff", default=-1., type=float, help="cutoff used to protect total yield from negative values.")
 parser.add_option("","--noHessian", default=False, action='store_true', help="Skip calculation of hessian matrix")
 parser.add_option("","--saturated", default=False, action='store_true', help="Calculate negative log likelihood value for saturated model (for using it in goodness of fit tests)")
+parser.add_option("", "--theoryFit", default=False, action='store_true',  help="Fit theory to unfolded cross section (e.g. mW extraction)")
+parser.add_option("", "--chisqFit", default=False, action='store_true',  help="Perform chi-square fit instead of likelihood fit")
+
 (options, args) = parser.parse_args()
 
 if len(args) == 0:
     parser.print_usage()
     exit(1)
+
+if options.chisqFit and options.theoryFit:
+  raise Exception('options "--theoryFit" and "--chisqFit" cannot be simultaneously used')
     
 seed = options.seed
 print(seed)
@@ -147,6 +153,9 @@ hconstraintweights = f['hconstraintweights']
 hdata_obs = f['hdata_obs']
 sparse = not 'hnorm' in f
 
+if options.theoryFit:
+  hdata_cov = f['hdata_cov']
+
 if sparse:
   hnorm_sparse = f['hnorm_sparse']
   hlogk_sparse = f['hlogk_sparse']
@@ -194,6 +203,9 @@ nsystgroupsfull = len(systgroupsfull)
 #returned tensors are evaluated for the first time inside the graph
 constraintweights = maketensor(hconstraintweights)
 data_obs = maketensor(hdata_obs)
+if options.theoryFit:
+  data_cov = maketensor(hdata_cov)
+
 if options.binByBinStat:
   hkstat = f['hkstat']
   kstat = maketensor(hkstat)
@@ -432,8 +444,6 @@ lognexpnom = tf.log(nexpnomsafe)
 
 if options.saturated:
   #saturated model  
-  nobsnull = tf.equal(nobs,tf.zeros_like(nobs))
-
   nobssafe = tf.where(nobsnull, tf.ones_like(nobs), nobs)
   lognobs = tf.log(nobssafe)
 
@@ -441,11 +451,13 @@ if options.saturated:
 
 #final likelihood computation
 
-#poisson term  
-lnfull = tf.reduce_sum(-nobs*lognexp + nexp, axis=-1)
-
-#poisson term with offset to improve numerical precision
-ln = tf.reduce_sum(-nobs*(lognexp-lognexpnom) + nexp-nexpnom, axis=-1)
+if options.theoryFit or options.chisqFit:
+  residual = tf.reshape(nobs-nexp,[-1,1]) #chi2 residual
+  cov_inv = tf.matrix_inverse(data_cov) if options.theoryFit else tf.matrix_inverse(tf.diag(nobs)) # provided covariance (unfolded) or Poisson variance (detector-level)
+  ln = lnfull = 0.5 * tf.reduce_sum(tf.matmul(residual,tf.matmul(cov_inv,residual),transpose_a=True))
+else: #poisson-likelihood fit
+  lnfull = tf.reduce_sum(-nobs*lognexp + nexp, axis=-1) #poisson term
+  ln = tf.reduce_sum(-nobs*(lognexp-lognexpnom) + nexp-nexpnom, axis=-1) #poisson term with offset to improve numerical precision
 
 #constraints
 lc = tf.reduce_sum(constraintweights*0.5*tf.square(theta - theta0))

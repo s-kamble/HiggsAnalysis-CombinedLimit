@@ -31,7 +31,7 @@ ROOT.gROOT.SetBatch(True)
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 argv.remove( '-b-' )
 
-from root_numpy import array2hist
+from root_numpy import array2hist, tree2array
 
 from array import array
 
@@ -77,7 +77,7 @@ parser.add_option("","--doRegularization", default=False, action='store_true', h
 parser.add_option("","--regularizationUseExpected", default=False, action='store_true', help="Use expectation in regularization (by regularizing mu instead of cross section)")
 parser.add_option("","--regularizationUseLog", default=False, action='store_true', help="Use logarithm of poi for curvature regularization")
 parser.add_option("","--regularizationTau", default=0.1, type=float, help="regularization strength")
-parser.add_option("","--doh5Output", default=False, action='store_true', help="store additional h5py output for offline analyis/debugging")
+parser.add_option("","--noh5Output", default=False, action='store_true', help="store additional h5py output for offline analyis/debugging")
 parser.add_option("","--doSmoothnessTest", default=False, action='store_true', help="run statistical smoothness test on absolute cross sections based on polynomial fits to regularization groups")
 parser.add_option("","--smoothnessTestMaxOrder", default=4, type=int, help="maximum polynomial order for smoothness test")
 parser.add_option("","--useExpNonProfiledErrs", default=False, action='store_true', help="use expected uncertainties for non-profiled nuisances")
@@ -149,6 +149,49 @@ poly2dreggroupbincenters1 = f['hpoly2dreggroupbincenters1'][...]
 noigroups = f['hnoigroups'][...]
 noigroupidxs = f['hnoigroupidxs'][...]
 maskedchans = f['hmaskedchans'][...]
+
+for x in [
+  (procs, "hprocs"),
+  (signals, "hsignals"),
+  (systs, "hsysts"),
+  (systsnoprofile, "hsystsnoprofile"),
+  (systsnoconstraint, "hsystsnoconstraint"),
+  (systgroups, "hsystgroups"),
+  (systgroupidxs, "hsystgroupidxs"),
+  (chargegroups, "hchargegroups"),
+  (chargegroupidxs, "hchargegroupidxs"),
+  (polgroups, "hpolgroups"),
+  (polgroupidxs, "hpolgroupidxs"),
+  (helgroups, "hhelgroups"),
+  (helgroupidxs, "hhelgroupidxs"),
+  (sumgroups, "hsumgroups"),
+  (sumgroupsegmentids, "hsumgroupsegmentids"),
+  (sumgroupidxs, "hsumgroupidxs"),
+  (chargemetagroups, "hchargemetagroups"),
+  (chargemetagroupidxs, "hchargemetagroupidxs"),
+  (ratiometagroups, "hratiometagroups"),
+  (ratiometagroupidxs, "hratiometagroupidxs"),
+  (helmetagroups, "hhelmetagroups"),
+  (helmetagroupidxs, "hhelmetagroupidxs"),
+  (reggroups, "hreggroups"),
+  (reggroupidxs, "hreggroupidxs"),
+  (poly1dreggroups, "hpoly1dreggroups"),
+  (poly1dreggroupfirstorder, "hpoly1dreggroupfirstorder"),
+  (poly1dreggrouplastorder, "hpoly1dreggrouplastorder"),
+  (poly1dreggroupnames, "hpoly1dreggroupnames"),
+  (poly1dreggroupbincenters, "hpoly1dreggroupbincenters"),
+  (poly2dreggroups, "hpoly2dreggroups"),
+  (poly2dreggroupfirstorder, "hpoly2dreggroupfirstorder"),
+  (poly2dreggrouplastorder, "hpoly2dreggrouplastorder"),
+  (poly2dreggroupfullorder, "hpoly2dreggroupfullorder"),
+  (poly2dreggroupnames, "hpoly2dreggroupnames"),
+  (poly2dreggroupbincenters0, "hpoly2dreggroupbincenters0"),
+  (poly2dreggroupbincenters1, "hpoly2dreggroupbincenters1"),
+  (noigroups, "hnoigroups"),
+  (noigroupidxs, "hnoigroupidxs"),
+  (maskedchans, "hmaskedchans"),
+]:
+  print(x[1], x[0].shape)
 
 #load arrays from file
 hconstraintweights = f['hconstraintweights']
@@ -1143,6 +1186,9 @@ if options.outputDir:
 fname = outdir + (options.output if options.output else 'fitresults_%i.root' % seed)
 if options.postfix:
   fname = fname.replace(".root","_{pf}.root".format(pf=options.postfix))
+
+doh5output = not options.noh5Output
+
 fout = ROOT.TFile( fname , 'recreate' )
 tree = ROOT.TTree("fitresults", "fitresults")
 
@@ -1291,15 +1337,32 @@ for syst in systs:
   tree.Branch('%s_minosdown' % systname, tthetaminosdown, '%s_minosdown/F' % systname)
   tree.Branch('%s_gen' % systname, tthetagenval, '%s_gen/F' % systname)
 
-doh5output = options.doh5Output
+def create_dataset(hf, name, data, dimension=None, dtype=None):
+  if dtype is None:
+    dtype = data.dtype
+  if dimension is None:
+    dimension = [len(data)]
+
+  hf.create_dataset(name, dimension, data=data, dtype=dtype, compression="gzip")
 
 if doh5output:
   #initialize h5py output
   h5fout = h5py.File(fname.replace(".root",".hdf5"), rdcc_nbytes=cacheSize, mode='w')
 
   #copy some info to output file
+
+  f.copy('hprocs', h5fout)
+  f.copy('hsignals', h5fout)
+  f.copy('hsysts',h5fout)
+  f.copy('hsystsnoprofile', h5fout)
+  f.copy('hsystsnoconstraint', h5fout)
+  f.copy('hsystgroups', h5fout)
+  f.copy('hsumgroups', h5fout)
+  f.copy('hnoigroups', h5fout)
   f.copy('hreggroups',h5fout)
   f.copy('hreggroupidxs',h5fout)
+  if 'meta' in f.keys():
+    f.copy('meta',h5fout)
 
   outnames = []
   for output,outputname in zip(outputs,outputnames):
@@ -1877,6 +1940,12 @@ for itoy in range(ntoys):
       #print ">>> nout: %d" % nout
       if nout == 0: continue  # to avoid errors with --POImode None
       ###
+     
+      if doh5output:
+        create_dataset(h5fout, 'nuisance_impact_'+outname, nuisanceimpactoutval, dimension=nuisanceimpactoutval.shape)
+
+        create_dataset(h5fout, 'nuisance_group_impact_'+outname, nuisancegroupimpactoutval, dimension=nuisancegroupimpactoutval.shape)
+
       nuisanceImpactHist = ROOT.TH2D('nuisance_impact_'+outname, 'per-nuisance impacts for '+dName+' in '+outname, int(nout), 0., 1., int(nsyst), 0., 1.)
       nuisanceGroupImpactHist = ROOT.TH2D('nuisance_group_impact_'+outname, 'per-nuisance-group impacts for '+dName+' in '+outname, int(nout), 0., 1., int(nsystgroupsfull), 0., 1.)
       
@@ -1892,8 +1961,8 @@ for itoy in range(ntoys):
         nuisanceImpactHist.GetYaxis().SetBinLabel(isyst+1, '%s' % syst)
 
       for isystgroup, systgroup in enumerate(systgroupsfull):
-        nuisanceGroupImpactHist.GetYaxis().SetBinLabel(isystgroup+1, '%s' % systgroup)
-            
+        nuisanceGroupImpactHist.GetYaxis().SetBinLabel(isystgroup+1, '%s' % systgroup)  
+
       array2hist(nuisanceimpactoutval,nuisanceImpactHist)
       array2hist(nuisancegroupimpactoutval,nuisanceGroupImpactHist)
 
@@ -2072,7 +2141,6 @@ for itoy in range(ntoys):
           tthetaval[0] = thetaval
 
         tree.Fill()
-
 
 fout.Write()
 fout.Close()

@@ -84,19 +84,19 @@ parser.add_option("","--useExpNonProfiledErrs", default=False, action='store_tru
 parser.add_option("","--yieldProtectionCutoff", default=-1., type=float, help="cutoff used to protect total yield from negative values.")
 parser.add_option("","--noHessian", default=False, action='store_true', help="Skip calculation of hessian matrix")
 parser.add_option("","--saturated", default=False, action='store_true', help="Calculate negative log likelihood value for saturated model (for using it in goodness of fit tests)")
-parser.add_option("", "--theoryFit", default=False, action='store_true',  help="Fit theory to unfolded cross section (e.g. mW extraction)")
-parser.add_option("", "--chisqFit", default=False, action='store_true',  help="Perform chi-square fit instead of likelihood fit")
-parser.add_option("", "--doJacobian", default = False, action='store_true', help="Compute and store Jacobian of expected event counts with respect to fit parameters")
+parser.add_option("","--externalCovariance", default=False, action='store_true',  help="Fit theory to unfolded cross section (e.g. mW extraction)")
+parser.add_option("","--chisqFit", default=False, action='store_true',  help="Perform chi-square fit instead of likelihood fit")
+parser.add_option("","--doJacobian", default = False, action='store_true', help="Compute and store Jacobian of expected event counts with respect to fit parameters")
 (options, args) = parser.parse_args()
 
 if len(args) == 0:
     parser.print_usage()
     exit(1)
 
-if options.chisqFit and options.theoryFit:
-  raise Exception('options "--theoryFit" and "--chisqFit" cannot be simultaneously used')
-if (options.chisqFit or options.theoryFit) and options.binByBinStat:
-  raise Exception('option "--binByBinStat" currently not supported for options "--theoryFit" and "--chisqFit"')
+if options.externalCovariance and not options.chisqFit:
+  raise Exception('option "--externalCovariance" only works with "--chisqFit"')
+if (options.chisqFit or options.externalCovariance) and options.binByBinStat:
+  raise Exception('option "--binByBinStat" currently not supported for options "--externalCovariance" and "--chisqFit"')
 
 seed = options.seed
 print(seed)
@@ -198,7 +198,7 @@ hconstraintweights = f['hconstraintweights']
 hdata_obs = f['hdata_obs']
 sparse = not 'hnorm' in f
 
-if options.theoryFit:
+if options.externalCovariance:
   hdata_cov_inv = f['hdata_cov_inv']
 
 if sparse:
@@ -248,7 +248,7 @@ nsystgroupsfull = len(systgroupsfull)
 #returned tensors are evaluated for the first time inside the graph
 constraintweights = maketensor(hconstraintweights)
 data_obs = maketensor(hdata_obs)
-if options.theoryFit:
+if options.externalCovariance:
   data_cov_inv = maketensor(hdata_cov_inv)
 
 if options.binByBinStat:
@@ -496,10 +496,15 @@ if options.saturated:
 
 #final likelihood computation
 
-if options.theoryFit or options.chisqFit:
-  residual = tf.reshape(nobs-nexp,[-1,1]) #chi2 residual
-  cov_inv = data_cov_inv if options.theoryFit else tf.matrix_inverse(tf.diag(nobs)) # provided covariance (unfolded) or Poisson variance (detector-level)
-  ln = lnfull = 0.5 * tf.reduce_sum(tf.matmul(residual,tf.matmul(cov_inv,residual),transpose_a=True))
+if options.chisqFit:
+  # provided covariance (unfolded) or Poisson variance (detector-level)
+  if not options.externalCovariance:
+    if any(nobs<=0):
+      raise RuntimeError("Bins in 'nobs <= 0' encountered, chi^2 fit can not be performed.")
+    data_cov_inv = tf.diag(tf.reciprocal(nobs))
+
+  residual = tf.reshape(nobs-nexp,[-1,1]) #chi2 residual  
+  ln = lnfull = 0.5 * tf.reduce_sum(tf.matmul(residual,tf.matmul(data_cov_inv,residual),transpose_a=True))
 else: #poisson-likelihood fit
   lnfull = tf.reduce_sum(-nobs*lognexp + nexp, axis=-1) #poisson term
   ln = tf.reduce_sum(-nobs*(lognexp-lognexpnom) + nexp-nexpnom, axis=-1) #poisson term with offset to improve numerical precision
@@ -1337,14 +1342,6 @@ for syst in systs:
   tree.Branch('%s_minosdown' % systname, tthetaminosdown, '%s_minosdown/F' % systname)
   tree.Branch('%s_gen' % systname, tthetagenval, '%s_gen/F' % systname)
 
-def create_dataset(hf, name, data, dimension=None, dtype=None):
-  if dtype is None:
-    dtype = data.dtype
-  if dimension is None:
-    dimension = [len(data)]
-
-  hf.create_dataset(name, dimension, data=data, dtype=dtype, compression="gzip")
-
 if doh5output:
   #initialize h5py output
   h5fout = h5py.File(fname.replace(".root",".hdf5"), rdcc_nbytes=cacheSize, mode='w')
@@ -1942,9 +1939,11 @@ for itoy in range(ntoys):
       ###
      
       if doh5output:
-        create_dataset(h5fout, 'nuisance_impact_'+outname, nuisanceimpactoutval, dimension=nuisanceimpactoutval.shape)
+        hnuisanceimpactoutval = h5fout.create_dataset("nuisance_impact_"+outname, nuisanceimpactoutval.shape, dtype=nuisanceimpactoutval.dtype, compression="gzip")
+        hnuisanceimpactoutval[...] = nuisanceimpactoutval
 
-        create_dataset(h5fout, 'nuisance_group_impact_'+outname, nuisancegroupimpactoutval, dimension=nuisancegroupimpactoutval.shape)
+        hnuisancegroupimpactoutval = h5fout.create_dataset("nuisance_group_impact_"+outname, nuisancegroupimpactoutval.shape, dtype=nuisancegroupimpactoutval.dtype, compression="gzip")
+        hnuisancegroupimpactoutval[...] = nuisancegroupimpactoutval
 
       nuisanceImpactHist = ROOT.TH2D('nuisance_impact_'+outname, 'per-nuisance impacts for '+dName+' in '+outname, int(nout), 0., 1., int(nsyst), 0., 1.)
       nuisanceGroupImpactHist = ROOT.TH2D('nuisance_group_impact_'+outname, 'per-nuisance-group impacts for '+dName+' in '+outname, int(nout), 0., 1., int(nsystgroupsfull), 0., 1.)

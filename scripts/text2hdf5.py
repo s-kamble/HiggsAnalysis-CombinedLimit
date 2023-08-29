@@ -45,8 +45,8 @@ parser.add_option("", "--scaleMaskedYields", type=float, default=1.,  help="Scal
 parser.add_option("", "--postfix", default="",type="string", help="add _<postfix> to output hdf5 file")
 parser.add_option("", "--clipSystVariations", type=float, default=-1.,  help="Clipping of syst variations (all processes)")
 parser.add_option("", "--clipSystVariationsSignal", type=float, default=-1.,  help="Clipping of syst variations (signal processes)")
-parser.add_option("", "--externalCovariance", default=False, action='store_true',  help="Fit theory to unfolded cross section (e.g. mW extraction)")
-parser.add_option("", "--addMCStat", default=False, action='store_true', help="add MC stat uncertainty to covariance matrix (compatible with theory fit only)")
+parser.add_option("", "--externalCovariance", default=False, action='store_true',  help="Using an external covariance matrix for the observations in the chi-square fit")
+parser.add_option("", "--addMCStat", default=False, action='store_true', help="add MC stat uncertainty to covariance matrix (compatible with --externalCovariance only)")
 (options, args) = parser.parse_args()
 
 if len(args) == 0:

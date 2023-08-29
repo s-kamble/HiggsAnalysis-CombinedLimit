@@ -84,8 +84,8 @@ parser.add_option("","--useExpNonProfiledErrs", default=False, action='store_tru
 parser.add_option("","--yieldProtectionCutoff", default=-1., type=float, help="cutoff used to protect total yield from negative values.")
 parser.add_option("","--noHessian", default=False, action='store_true', help="Skip calculation of hessian matrix")
 parser.add_option("","--saturated", default=False, action='store_true', help="Calculate negative log likelihood value for saturated model (for using it in goodness of fit tests)")
-parser.add_option("","--externalCovariance", default=False, action='store_true',  help="Fit theory to unfolded cross section (e.g. mW extraction)")
 parser.add_option("","--chisqFit", default=False, action='store_true',  help="Perform chi-square fit instead of likelihood fit")
+parser.add_option("","--externalCovariance", default=False, action='store_true',  help="Using an external covariance matrix for the observations in the chi-square fit")
 parser.add_option("","--doJacobian", default = False, action='store_true', help="Compute and store Jacobian of expected event counts with respect to fit parameters")
 (options, args) = parser.parse_args()
 

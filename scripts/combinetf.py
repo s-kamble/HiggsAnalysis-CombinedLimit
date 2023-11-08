@@ -47,6 +47,7 @@ if doplotting:
 parser = OptionParser(usage="usage: %prog [options] datacard.txt -o output \nrun with --help to get list of options")
 parser.add_option("-o","--output", default=None, type="string", help="output file name")
 parser.add_option("-t","--toys", default=0, type=int, help="run a given number of toys, 0 fits the data (default), and -1 fits the asimov toy")
+parser.add_option("-p","--pseudodata", default=None, type=str, help="run fit on pseudodata with the given index")
 parser.add_option("","--toysBayesian", default=False, action='store_true', help="run bayesian-type toys (otherwise frequentist)")
 parser.add_option("","--bypassFrequentistFit", default=True, action='store_true', help="bypass fit to data when running frequentist toys to get toys based on prefit expectations")
 parser.add_option("","--bootstrapData", default=False, action='store_true', help="throw toys directly from observed data counts rather than expectation from templates")
@@ -149,6 +150,8 @@ poly2dreggroupbincenters1 = f['hpoly2dreggroupbincenters1'][...]
 noigroups = f['hnoigroups'][...]
 noigroupidxs = f['hnoigroupidxs'][...]
 maskedchans = f['hmaskedchans'][...]
+if "hpseudodatasystidxs" in f.keys():
+  pseudodatasystidxs = f['hpseudodatasystidxs'][...]
 
 for x in [
   (procs, "hprocs"),
@@ -195,7 +198,23 @@ for x in [
 
 #load arrays from file
 hconstraintweights = f['hconstraintweights']
-hdata_obs = f['hdata_obs']
+
+#load data/pseudodata
+if options.pseudodata is not None:
+  pseudodata = options.pseudodata.split(" ")
+  if len(pseudodata) == 1 and pseudodata[0].isdigit():
+    pseudodata_idx = int(pseudodata[0])
+  elif pseudodata in pseudodatasystidxs:
+    pseudodata_idx = np.where((pseudodata == pseudodatasystidxs).all(axis=-1))[0][0]
+  else:
+    raise Exception("Pseudodata %s not found, available pseudodata sets are %s" % (options.pseudodata, pseudodatasystidxs))
+
+  print("Run pseudodata fit for index %i: " % (pseudodata_idx))
+  print(pseudodatasystidxs[pseudodata_idx])
+  hdata_obs =  f['hpseudodata']
+else:
+  hdata_obs = f['hdata_obs']
+
 sparse = not 'hnorm' in f
 
 if options.externalCovariance:
@@ -212,7 +231,7 @@ else:
 
 #infer some metadata from loaded information
 dtype = hdata_obs.dtype
-nbins = hdata_obs.shape[-1]
+nbins = hdata_obs.attrs["original_shape"][0]
 nbinsmasked = nbinsfull - nbins
 nproc = len(procs)
 nsyst = len(systs)
@@ -248,6 +267,8 @@ nsystgroupsfull = len(systgroupsfull)
 #returned tensors are evaluated for the first time inside the graph
 constraintweights = maketensor(hconstraintweights)
 data_obs = maketensor(hdata_obs)
+if options.pseudodata is not None:
+  data_obs = data_obs[:, pseudodata_idx]
 if options.externalCovariance:
   data_cov_inv = maketensor(hdata_cov_inv)
 
@@ -469,7 +490,7 @@ pmaskedexpnorm = rnorm*pmaskedexpnorm
 
 pmaskedexpsig = pmaskedexp[:nsignals]
 pmaskedexpnormsig = pmaskedexpnorm[:nsignals]
-  
+
 if options.saveHists:
   nexpsigcentral = tf.reduce_sum(normfullcentral[:,:nsignals],axis=-1)
   nexpbkgcentral = tf.reduce_sum(normfullcentral[:,nsignals:],axis=-1)
@@ -1768,7 +1789,7 @@ for itoy in range(ntoys):
         errstatus = 0
       except:
         pass
-
+  
     if isposdefval and edmval > -edmtol:
       status = 0
     else:
@@ -2034,8 +2055,10 @@ for itoy in range(ntoys):
   tndof[0] = x.shape[0]
   tndofpartial[0] = npoi
   ttaureg[0] = taureg
-  
-  for output,outputname, outvals,outsigmas,minosups,minosdowns,outgenvals,toutvals,touterrs,toutminosups,toutminosdowns,toutgenvals in zip(outputs, outputnames, outvalss,outsigmass,outminosupss,outminosdownss,outvalsgens,toutvalss,touterrss,toutminosupss,toutminosdownss,toutgenvalss):
+
+  for output,outputname, outvals,outsigmas,minosups,minosdowns,outgenvals,toutvals,touterrs,toutminosups,toutminosdowns,toutgenvals in zip(
+    outputs, outputnames, outvalss,outsigmass,outminosupss,outminosdownss,outvalsgens,toutvalss,touterrss,toutminosupss,toutminosdownss,toutgenvalss
+    ):
     #outname = ":".join(output.name.split(":")[:-1])    
     for name,outval,outma,minosup,minosdown,outgenval,toutval,touterr,toutminosup,toutminosdown,toutgenval in zip(outputname,outvals,outsigmas,minosups,minosdowns,outgenvals,toutvals,touterrs,toutminosups,toutminosdowns,toutgenvals):
       toutval[0] = outval

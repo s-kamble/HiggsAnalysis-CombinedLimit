@@ -201,19 +201,10 @@ hconstraintweights = f['hconstraintweights']
 
 #load data/pseudodata
 if options.pseudodata is not None:
-  # try to get the pseudodata by string matching
-  pseudodata = options.pseudodata.split(" ")
-  pseudodata_idx = np.where([all([p in i for p in pseudodata]) for i in pseudodatasystidxs])[0]
-  if len(pseudodata_idx) == 1:
-    pseudodata_idx = pseudodata_idx[0]
-  elif len(pseudodata_idx) == 0 and len(pseudodata) == 1 and pseudodata[0].isdigit() and int(pseudodata[0]) < len(pseudodatasystidxs):
-    pseudodata_idx = int(pseudodata[0]) # try to get the pseudodata by index
+  if options.pseudodata in pseudodatasystidxs:
+    pseudodata_idx = np.where(pseudodatasystidxs == options.pseudodata)[0][0]
   else:
-    if len(pseudodata_idx) > 1:
-      raise Exception("Multiple matches for `%s` found. Please provide an unambiguous string or index. Available pseudodata sets are %s" % (options.pseudodata, pseudodatasystidxs))
-    else:
-      raise Exception("Pseudodata %s not found, available pseudodata sets are %s" % (options.pseudodata, pseudodatasystidxs))
-
+    raise Exception("Pseudodata %s not found, available pseudodata sets are %s" % (options.pseudodata, pseudodatasystidxs))
   print("Run pseudodata fit for index %i: " % (pseudodata_idx))
   print(pseudodatasystidxs[pseudodata_idx])
   hdata_obs =  f['hpseudodata']

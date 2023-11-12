@@ -150,8 +150,8 @@ poly2dreggroupbincenters1 = f['hpoly2dreggroupbincenters1'][...]
 noigroups = f['hnoigroups'][...]
 noigroupidxs = f['hnoigroupidxs'][...]
 maskedchans = f['hmaskedchans'][...]
-if "hpseudodatasystidxs" in f.keys():
-  pseudodatasystidxs = f['hpseudodatasystidxs'][...]
+if "hpseudodatanames" in f.keys():
+  pseudodatanames = f['hpseudodatanames'][...]
 
 for x in [
   (procs, "hprocs"),
@@ -201,12 +201,12 @@ hconstraintweights = f['hconstraintweights']
 
 #load data/pseudodata
 if options.pseudodata is not None:
-  if options.pseudodata in pseudodatasystidxs:
-    pseudodata_idx = np.where(pseudodatasystidxs == options.pseudodata)[0][0]
+  if options.pseudodata in pseudodatanames:
+    pseudodata_idx = np.where(pseudodatanames == options.pseudodata)[0][0]
   else:
-    raise Exception("Pseudodata %s not found, available pseudodata sets are %s" % (options.pseudodata, pseudodatasystidxs))
+    raise Exception("Pseudodata %s not found, available pseudodata sets are %s" % (options.pseudodata, pseudodatanames))
   print("Run pseudodata fit for index %i: " % (pseudodata_idx))
-  print(pseudodatasystidxs[pseudodata_idx])
+  print(pseudodatanames[pseudodata_idx])
   hdata_obs =  f['hpseudodata']
 else:
   hdata_obs = f['hdata_obs']

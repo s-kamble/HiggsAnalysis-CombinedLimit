@@ -544,7 +544,7 @@ if options.binByBinStat:
   #lbeta = lbetafull
   
   l = l + lbeta
-  lfull = lfull + lbetafull
+  lfull = lfull + lbeta
  
 #name outputs
 poi = tf.identity(poi, name=options.POIMode)

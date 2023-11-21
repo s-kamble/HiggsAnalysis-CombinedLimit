@@ -84,7 +84,6 @@ parser.add_option("","--smoothnessTestMaxOrder", default=4, type=int, help="maxi
 parser.add_option("","--useExpNonProfiledErrs", default=False, action='store_true', help="use expected uncertainties for non-profiled nuisances")
 parser.add_option("","--yieldProtectionCutoff", default=-1., type=float, help="cutoff used to protect total yield from negative values.")
 parser.add_option("","--noHessian", default=False, action='store_true', help="Skip calculation of hessian matrix")
-parser.add_option("","--saturated", default=False, action='store_true', help="Calculate negative log likelihood value for saturated model (for using it in goodness of fit tests)")
 parser.add_option("","--chisqFit", default=False, action='store_true',  help="Perform chi-square fit instead of likelihood fit")
 parser.add_option("","--externalCovariance", default=False, action='store_true',  help="Using an external covariance matrix for the observations in the chi-square fit")
 parser.add_option("","--doJacobian", default = False, action='store_true', help="Compute and store Jacobian of expected event counts with respect to fit parameters")
@@ -504,12 +503,11 @@ nexpnom = tf.Variable(nexp, trainable=False, name="nexpnom")
 nexpnomsafe = tf.where(nobsnull, tf.ones_like(nobs), nexpnom)
 lognexpnom = tf.log(nexpnomsafe)
 
-if options.saturated:
-  #saturated model  
-  nobssafe = tf.where(nobsnull, tf.ones_like(nobs), nobs)
-  lognobs = tf.log(nobssafe)
+#saturated model  
+nobssafe = tf.where(nobsnull, tf.ones_like(nobs), nobs)
+lognobs = tf.log(nobssafe)
 
-  lsaturated = tf.reduce_sum(-nobs*lognobs + nobs, axis=-1)
+lsaturated = tf.reduce_sum(-nobs*lognobs + nobs, axis=-1)
 
 #final likelihood computation
 
@@ -1095,9 +1093,14 @@ def experrpedantic(expected,invhess):
   return err
 
 if options.saveHists:
-  #for prefit uncertainties assume zero uncertainty on pois since this is not well defined
-  #and uncorrelated unit uncertainties on nuisances parameters
-  invhessianprefit = tf.diag(tf.concat([tf.zeros_like(xpoi),tf.ones_like(theta)],axis=0))
+  # free parameters are taken to have zero uncertainty for the purposes of prefit uncertainties
+  var_poi = tf.zeros_like(xpoi, dtype=dtype)
+  # nuisances have their uncertainty taken from the constraint term, but unconstrained nuisances
+  # are set to zero uncertainty for the purposes of prefit uncertainties
+  var_theta = tf.where(tf.equal(constraintweights, 0.0), tf.zeros_like(constraintweights), tf.reciprocal(constraintweights))
+
+  invhessianprefit = tf.diag(tf.concat([var_poi, var_theta], axis = 0))
+
   #for a diagonal matrix with only ones and zeros the cholesky decomposition is equal to the matrix itself
   invhessianprefitchol = invhessianprefit
   
@@ -1256,10 +1259,9 @@ tree.Branch('ndofpartial',tndofpartial,'ndofpartial/I')
 ttaureg = array('d',[0.])
 tree.Branch('taureg',ttaureg,'taureg/D')
 
-if options.saturated:
-  # add information of saturated model
-  tsatnllvalfull = array('d',[0.])
-  tree.Branch('satnllvalfull',tsatnllvalfull,'satnllvalfull/D')
+# add information of saturated model
+tsatnllvalfull = array('d',[0.])
+tree.Branch('satnllvalfull',tsatnllvalfull,'satnllvalfull/D')
 
 maxorder = options.smoothnessTestMaxOrder
 tsmoothchisqs = []
@@ -2037,9 +2039,8 @@ for itoy in range(ntoys):
     dxvaldown = -(xvalminosdown[erridx]-outthetaval[erridx])
     minoserrsdown[erroutidx] = dxvaldown
         
-  if options.saturated:
-    nllvalsaturated = sess.run(lsaturated) 
-    tsatnllvalfull[0] = nllvalsaturated
+  nllvalsaturated = sess.run(lsaturated) 
+  tsatnllvalfull[0] = nllvalsaturated
 
   tstatus[0] = status
   terrstatus[0] = errstatus

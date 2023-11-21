@@ -1093,9 +1093,14 @@ def experrpedantic(expected,invhess):
   return err
 
 if options.saveHists:
-  #for prefit uncertainties assume zero uncertainty on pois since this is not well defined
-  #and uncorrelated unit uncertainties on nuisances parameters
-  invhessianprefit = tf.diag(tf.concat([tf.zeros_like(xpoi),tf.ones_like(theta)],axis=0))
+  # free parameters are taken to have zero uncertainty for the purposes of prefit uncertainties
+  var_poi = tf.zeros_like(xpoi, dtype=dtype)
+  # nuisances have their uncertainty taken from the constraint term, but unconstrained nuisances
+  # are set to zero uncertainty for the purposes of prefit uncertainties
+  var_theta = tf.where(tf.equal(constraintweights, 0.0), tf.zeros_like(constraintweights), tf.reciprocal(constraintweights))
+
+  invhessianprefit = tf.diag(tf.concat([var_poi, var_theta], axis = 0))
+
   #for a diagonal matrix with only ones and zeros the cholesky decomposition is equal to the matrix itself
   invhessianprefitchol = invhessianprefit
   

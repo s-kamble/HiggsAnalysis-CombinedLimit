@@ -87,6 +87,8 @@ parser.add_option("","--noHessian", default=False, action='store_true', help="Sk
 parser.add_option("","--chisqFit", default=False, action='store_true',  help="Perform chi-square fit instead of likelihood fit")
 parser.add_option("","--externalCovariance", default=False, action='store_true',  help="Using an external covariance matrix for the observations in the chi-square fit")
 parser.add_option("","--doJacobian", default = False, action='store_true', help="Compute and store Jacobian of expected event counts with respect to fit parameters")
+parser.add_option("","--skipNullExpBins", default = False, action='store_true', help="skip bins with zero expected events in likelihood")
+parser.add_option("","--globalImpacts", default = False, action='store_true', help="compute impacts in terms of variations of global observables (as opposed to nuisance parameters directly)")
 (options, args) = parser.parse_args()
 
 if len(args) == 0:
@@ -323,6 +325,23 @@ x = tf.Variable(xdefault, name="x")
 xpoi = x[:npoi]
 theta = x[npoi:]
 
+if False:
+  # hardcoded random blinding for now
+  thetarng = np.zeros((nsyst,), dtype=np.float64)
+
+  if options.toys == 0 and options.pseudodata is None:
+    np.random.seed()
+    for isyst, syst in enumerate(systs):
+      if "mass" in syst.lower():
+        print("blinding syst:", syst)
+        thetarng[isyst] = np.random.normal(loc=0., scale=50.)
+
+  thetarng = tf.constant(thetarng, dtype=dtype)
+
+  thetafit = theta + thetarng
+else:
+  thetafit = theta
+
 if boundmode == 0:
   poi = xpoi
   gradr = tf.ones_like(poi)
@@ -341,14 +360,14 @@ mrnorm = tf.expand_dims(rnorm,-1)
 ernorm = tf.reshape(rnorm,[1,-1])
 
 #interpolation for asymmetric log-normal
-twox = 2.*theta
+twox = 2.*thetafit
 twox2 = twox*twox
 alpha =  0.125 * twox * (twox2 * (3.*twox2 - 10.) + 15.)
 alpha = tf.clip_by_value(alpha,-1.,1.)
 
-thetaalpha = theta*alpha
+thetaalpha = thetafit*alpha
 
-mthetaalpha = tf.stack([theta,thetaalpha],axis=0) #now has shape [2,nsyst]
+mthetaalpha = tf.stack([thetafit,thetaalpha],axis=0) #now has shape [2,nsyst]
 mthetaalpha = tf.reshape(mthetaalpha,[2*nsyst,1])
 
 if sparse:  
@@ -495,6 +514,10 @@ if options.saveHists:
 
 
 nobsnull = tf.equal(nobs,tf.zeros_like(nobs))
+nexpnull = tf.equal(nexp,tf.zeros_like(nexp))
+
+if options.skipNullExpBins:
+  nobsnull = tf.logical_or(nobsnull, nexpnull)
 
 nexpsafe = tf.where(nobsnull, tf.ones_like(nobs), nexp)
 lognexp = tf.log(nexpsafe)
@@ -525,14 +548,17 @@ else: #poisson-likelihood fit
   ln = tf.reduce_sum(-nobs*(lognexp-lognexpnom) + nexp-nexpnom, axis=-1) #poisson term with offset to improve numerical precision
 
 #constraints
-lc = tf.reduce_sum(constraintweights*0.5*tf.square(theta - theta0))
+lc = tf.reduce_sum(constraintweights*0.5*tf.square(thetafit - theta0))
 
 l = ln + lc
 lfull = lnfull + lc
 
 if options.binByBinStat:
   #lbetavfull = -(kstat-1.)*tf.log(beta) + kstat*beta
-  lbetavfull = -kstat*tf.log(beta) + kstat*beta
+  # need to introduce a global observable to allow calculation of global impacts
+  # TODO simplify this with gaussian constraint + transformation?
+  beta0 = tf.ones_like(beta)
+  lbetavfull = -kstat*tf.log(beta/beta0) + kstat*beta/beta0
   #lbetavfull = tf.where(nobsnull,tf.zeros_like(lbetavfull),lbetavfull)
   #lbetavfull = 0.5*kstat*tf.square(beta-1.)
   lbetafull = tf.reduce_sum(lbetavfull)
@@ -968,6 +994,36 @@ else:
 
 mineigvinv = tf.reduce_min(tf.self_adjoint_eigvals(invhessian))
 
+if options.doImpacts and options.globalImpacts:
+  invhessianglobalouts = []
+
+  # derivatives are rescaled to one sigma variation of the constraint, except for special case of
+  # unconstrained nuisance where the derivative is zero by definition
+  vconstraint = tf.concat([tf.zeros([npoi], dtype=dtype), tf.where(constraintweights>0., tf.ones_like(constraintweights), tf.zeros_like(constraintweights))], axis=0)
+
+  pd2ldxdtheta0 = -tf.diag(vconstraint)
+  pd2ldxdtheta0 = pd2ldxdtheta0[:, npoi:]
+
+  dxdtheta0 = -tf.matmul(invhessian, pd2ldxdtheta0)
+
+  # partial derivative for data statistical uncertainty
+  if options.externalCovariance:
+    raise ValueError("--globalImpacts and --externalCovariance are not compatible currently since the calculation assumes indepndent poisson statistics")
+
+  pd2ldxdnobs = jacobian(grad,nobs,gate_gradients=True,parallel_iterations=nthreadshess,back_prop=False)
+
+  dxdnobs = -tf.matmul(invhessian, pd2ldxdnobs)
+  dxdnobsscaled = tf.sqrt(nobs[None, :])*dxdnobs
+
+  if options.binByBinStat:
+    pd2ldxdbeta0 = jacobian(grad,beta0,gate_gradients=True,parallel_iterations=nthreadshess,back_prop=False)
+
+    dxdbeta0  = -tf.matmul(invhessian, pd2ldxdbeta0)
+    dxdbeta0scaled = tf.sqrt(1./kstat[None, :])*dxdbeta0
+
+
+
+
 invhessianouts = []
 jacouts = []
 for output in outputs:
@@ -975,15 +1031,37 @@ for output in outputs:
   invhessianout = tf.matmul(jacout,tf.matmul(invhessian,jacout,transpose_b=True))
   invhessianouts.append(invhessianout)
   jacouts.append(jacout)
+
+  # if options.doImpacts and options.globalImpacts:
+  #   invhessoutglobalout = tf.matmul(jacout, dxdtheta0)
+  #   invhessianglobalouts.append(invhessoutglobalout)
+  #
+  #   datastatimpact = tf.matmul(jac, tf.sqrt(nobs[None, :])*pd2ldxdnobs)
+  #   datastatimpacts.append(datastatimpact)
+  #
+  #   if options.binByBinStat:
+  #     mcstatimpact = tf.matmul(jac, 1./tf.sqrt(kstat[None, :])*pd2ldxdnobs)
+  #     mcstatimpacts.append(mcstatimpact)
+
+  # else:
+  #   invhessianglobalouts.append(None)
+  #   datastatimpacts.append(None)
+  #   mcstatimpacts.append(None)
   
+# invhessianoutimpacts = invhessianglobalouts if options.globalImpacts else invhessianouts
+
 #impacts
 if options.doImpacts:
   #signed per nuisance impacts
   nuisanceimpactouts = []
   for output,invhessianout in zip(outputs,invhessianouts):
     nout = output.shape[0]
-    #impact for poi at index i in covariance matrix from nuisance with index j is C_ij/sqrt(C_jj) = <deltax deltatheta>/sqrt(<deltatheta^2>)
-    nuisanceimpactout = invhessianout[:nout,nout:]/tf.reshape(tf.sqrt(tf.matrix_diag_part(invhessianout)[nout:]),[1,-1])
+    if options.globalImpacts:
+      nuisanceimpactout = dxdtheta0[:nout, :]
+    else:
+      #impact for poi at index i in covariance matrix from nuisance with index j is C_ij/sqrt(C_jj) = <deltax deltatheta>/sqrt(<deltatheta^2>)
+      nuisanceimpactout = invhessianout[:nout,nout:]/tf.reshape(tf.sqrt(tf.matrix_diag_part(invhessianout)[nout:]),[1,-1])
+
     nuisanceimpactouts.append(nuisanceimpactout)
 
   #unsigned per nuisance group impacts
@@ -1019,6 +1097,7 @@ if options.doImpacts:
     groupmcovs.append(groupmcov)
 
   nuisancegroupimpactouts = []
+
   #for vcovout in vcovouts:
   for output, invhessianout, jacout in zip(outputs,invhessianouts,jacouts):
     jacoutNoBBB = jacout
@@ -1026,28 +1105,47 @@ if options.doImpacts:
       jacoutNoBBB = jacobian(tf.concat([output,theta],axis=0),x,gate_gradients=True,parallel_iterations=nthreadshess,back_prop=False,stop_gradients=beta)
     
     nout = output.shape[0]
-    vcovout = invhessianout[:nout,nout:]
     nuisancegroupimpactlist = []
     for systgroupidx,groupmcov in zip(systgroupidxs,groupmcovs):
-      #impact is generalization of per-nuisance impacts above v^T C^-1 v
-      #where v is the matrix of poi x nuisance correlations within the group
-      #and C is is the subset of the covariance matrix corresponding to the nuisances in the group
-      vcovreduced = tf.gather(vcovout,systgroupidx,axis=1)
-      vimpact = tf.sqrt(tf.matrix_diag_part(tf.matmul(tf.matmul(vcovreduced,groupmcov),vcovreduced,transpose_b=True)))
+      if options.globalImpacts:
+        impacts = tf.matmul(jacout, dxdtheta0)
+        vcovout = impacts[:nout,:]
+        vcovreduced = tf.gather(vcovout,systgroupidx,axis=1)
+        vimpact = tf.sqrt(tf.reduce_sum(tf.square(vcovreduced), axis=1))
+      else:
+        #impact is generalization of per-nuisance impacts above v^T C^-1 v
+        #where v is the matrix of poi x nuisance correlations within the group
+        #and C is is the subset of the covariance matrix corresponding to the nuisances in the group
+        vcovout = invhessianout[:nout,nout:]
+        vcovreduced = tf.gather(vcovout,systgroupidx,axis=1)
+        vimpact = tf.sqrt(tf.matrix_diag_part(tf.matmul(tf.matmul(vcovreduced,groupmcov),vcovreduced,transpose_b=True)))
+
       nuisancegroupimpactlist.append(vimpact)
     
     #statistical uncertainties only
-    jacoutstat = jacoutNoBBB[:nout,:nstat]
-    invhessoutStat = tf.matmul(jacoutstat,tf.matmul(invhessianStat,jacoutstat,transpose_b=True))
-    impactStat = tf.sqrt(tf.matrix_diag_part(invhessoutStat))
+    if options.globalImpacts:
+      datastatimpact = tf.matmul(jacout, dxdnobsscaled)
+      datastatimpact = datastatimpact[:nout, :]
+      impactStat = tf.sqrt(tf.reduce_sum(tf.square(datastatimpact), axis=1))
+    else:
+      jacoutstat = jacoutNoBBB[:nout,:nstat]
+      invhessoutStat = tf.matmul(jacoutstat,tf.matmul(invhessianStat,jacoutstat,transpose_b=True))
+      impactStat = tf.sqrt(tf.matrix_diag_part(invhessoutStat))
+
     nuisancegroupimpactlist.append(impactStat)
 
     #bin by bin template statistical uncertainties
     if options.binByBinStat:
-      jacoutStatBBB = jacout[:nout,:nstat]
-      invhessianoutStatBBB = tf.matmul(jacoutStatBBB,tf.matmul(invhessianStatBBB,jacoutStatBBB,transpose_b=True))
-      impactBBBsq = tf.matrix_diag_part(invhessianoutStatBBB - invhessoutStat)[:nout]
-      impactBBB = tf.sqrt(tf.maximum(tf.zeros_like(impactBBBsq),impactBBBsq))
+      if options.globalImpacts:
+        mcstatimpact = tf.matmul(jacout, dxdbeta0scaled)
+        mcstatimpact = mcstatimpact[:nout, :]
+        impactBBB = tf.sqrt(tf.reduce_sum(tf.square(mcstatimpact), axis=1))
+      else:
+        jacoutStatBBB = jacout[:nout,:nstat]
+        invhessianoutStatBBB = tf.matmul(jacoutStatBBB,tf.matmul(invhessianStatBBB,jacoutStatBBB,transpose_b=True))
+        impactBBBsq = tf.matrix_diag_part(invhessianoutStatBBB - invhessoutStat)[:nout]
+        impactBBB = tf.sqrt(tf.maximum(tf.zeros_like(impactBBBsq),impactBBBsq))
+
       nuisancegroupimpactlist.append(impactBBB)
     
     nuisancegroupimpactout = tf.stack(nuisancegroupimpactlist,axis=1)

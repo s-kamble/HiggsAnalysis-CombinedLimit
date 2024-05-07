@@ -150,6 +150,7 @@ poly2dreggroupbincenters0 = f['hpoly2dreggroupbincenters0'][...]
 poly2dreggroupbincenters1 = f['hpoly2dreggroupbincenters1'][...]
 noigroups = f['hnoigroups'][...]
 noigroupidxs = f['hnoigroupidxs'][...]
+maskednoigroupidxs = f['hmaskednoigroupidxs'][...]
 maskedchans = f['hmaskedchans'][...]
 if "hpseudodatanames" in f.keys():
   pseudodatanames = f['hpseudodatanames'][...]
@@ -193,6 +194,7 @@ for x in [
   (poly2dreggroupbincenters1, "hpoly2dreggroupbincenters1"),
   (noigroups, "hnoigroups"),
   (noigroupidxs, "hnoigroupidxs"),
+  (maskednoigroupidxs, "hmaskednoigroupidxs"),
   (maskedchans, "hmaskedchans"),
 ]:
   print(x[1], x[0].shape)
@@ -511,8 +513,11 @@ if nsignals > 0:
   pmaskedexpsig = pmaskedexp[:nsignals]
   pmaskedexpnormsig = pmaskedexpnorm[:nsignals]
 else:
+  pmaskedexp = pmaskedexp
+  pmaskedexpnorm = pmaskedexp*tf.reciprocal(tf.reduce_sum(maskedexp))
+
   pmaskedexpsig = pmaskedexp
-  pmaskedexpnormsig = pmaskedexp*tf.reciprocal(tf.reduce_sum(maskedexp))
+  pmaskedexpnormsig = pmaskedexpnorm
 
 if options.saveHists:
   nexpsigcentral = tf.reduce_sum(normfullcentral[:,:nsignals],axis=-1)
@@ -619,15 +624,17 @@ if options.POIMode == "mu":
     elif nnoigroups > 0:
       outputs.append(pmaskedexpsig)
       outputs.append(pmaskedexpnormsig)
-      
+
       outputname = []
-      for noi in systs[:len(noigroupidxs)]:
-        outputname.append("%s_pmaskedexp" % noi)
+      for idx, noi in enumerate(systs[:len(noigroupidxs)]):
+        if idx in maskednoigroupidxs:
+          outputname.append("%s_pmaskedexp" % noi)
       outputnames.append(outputname)
 
       outputname = []
-      for noi in systs[:len(noigroupidxs)]:
-        outputname.append("%s_pmaskedexpnorm" % noi)
+      for idx, noi in enumerate(systs[:len(noigroupidxs)]):
+        if idx in maskednoigroupidxs:
+          outputname.append("%s_pmaskedexpnorm" % noi)
       outputnames.append(outputname)
 
   #charge asymmetries if defined

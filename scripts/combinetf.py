@@ -148,9 +148,11 @@ poly2dreggroupfullorder = f['hpoly2dreggroupfullorder'][...]
 poly2dreggroupnames = f['hpoly2dreggroupnames'][...]
 poly2dreggroupbincenters0 = f['hpoly2dreggroupbincenters0'][...]
 poly2dreggroupbincenters1 = f['hpoly2dreggroupbincenters1'][...]
+
 noigroups = f['hnoigroups'][...]
 noigroupidxs = f['hnoigroupidxs'][...]
-maskednoigroupidxs = f['hmaskednoigroupidxs'][...]
+if "hmaskednoigroupidxs" in f.keys():
+  maskednoigroupidxs = f['hmaskednoigroupidxs'][...]
 maskedchans = f['hmaskedchans'][...]
 if "hpseudodatanames" in f.keys():
   pseudodatanames = f['hpseudodatanames'][...]
@@ -194,7 +196,6 @@ for x in [
   (poly2dreggroupbincenters1, "hpoly2dreggroupbincenters1"),
   (noigroups, "hnoigroups"),
   (noigroupidxs, "hnoigroupidxs"),
-  (maskednoigroupidxs, "hmaskednoigroupidxs"),
   (maskedchans, "hmaskedchans"),
 ]:
   print(x[1], x[0].shape)

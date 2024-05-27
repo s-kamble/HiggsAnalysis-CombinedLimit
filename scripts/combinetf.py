@@ -2202,7 +2202,7 @@ for itoy in range(ntoys):
   tdnllval[0] = dnllval
   tscanidx[0] = -1
   tndof[0] = x.shape[0]
-  tndofpartial[0] = npoi
+  tndofpartial[0] = npoi + nsystnoconstraint
   ttaureg[0] = taureg
 
   for output,outputname, outvals,outsigmas,minosups,minosdowns,outgenvals,toutvals,touterrs,toutminosups,toutminosdowns,toutgenvals in zip(

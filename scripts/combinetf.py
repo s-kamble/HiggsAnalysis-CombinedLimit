@@ -90,6 +90,8 @@ parser.add_option("","--doJacobian", default = False, action='store_true', help=
 parser.add_option("","--skipNullExpBins", default = False, action='store_true', help="skip bins with zero expected events in likelihood")
 parser.add_option("","--globalImpacts", default = False, action='store_true', help="compute impacts in terms of variations of global observables (as opposed to nuisance parameters directly)")
 parser.add_option("","--scaleBinByBinStat", default=-1., type=float, help="scale bin by bin stat")
+parser.add_option("","--unblind", default=False, action="store_true", help="unblind mass values")
+parser.add_option("","--yes-i-really-really-mean-it", default=False, action="store_true", help="really unblind mass values")
 
 (options, args) = parser.parse_args()
 
@@ -331,16 +333,20 @@ x = tf.Variable(xdefault, name="x")
 xpoi = x[:npoi]
 theta = x[npoi:]
 
-if False:
+if options.unblind and not options.yes_i_really_really_mean_it:
+  raise RuntimeError("to unblind add --yes-i-really-really-mean-it")
+
+if options.toys == 0 and options.pseudodata is None and not options.unblind:
   # hardcoded random blinding for now
   thetarng = np.zeros((nsyst,), dtype=np.float64)
 
-  if options.toys == 0 and options.pseudodata is None:
-    np.random.seed()
-    for isyst, syst in enumerate(systs):
-      if "mass" in syst.lower():
-        print("blinding syst:", syst)
-        thetarng[isyst] = np.random.normal(loc=0., scale=50.)
+  np.random.seed()
+  offset = np.random.normal(loc=0., scale=50.)
+  for isyst, syst in enumerate(systs):
+
+    if syst.startswith("massShift"):
+      print("blinding syst:", syst)
+      thetarng[isyst] = offset
 
   thetarng = tf.constant(thetarng, dtype=dtype)
 

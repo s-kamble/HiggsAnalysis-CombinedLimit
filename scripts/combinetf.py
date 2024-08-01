@@ -89,6 +89,8 @@ parser.add_option("","--externalCovariance", default=False, action='store_true',
 parser.add_option("","--doJacobian", default = False, action='store_true', help="Compute and store Jacobian of expected event counts with respect to fit parameters")
 parser.add_option("","--skipNullExpBins", default = False, action='store_true', help="skip bins with zero expected events in likelihood")
 parser.add_option("","--globalImpacts", default = False, action='store_true', help="compute impacts in terms of variations of global observables (as opposed to nuisance parameters directly)")
+parser.add_option("","--scaleBinByBinStat", default=-1., type=float, help="scale bin by bin stat")
+
 (options, args) = parser.parse_args()
 
 if len(args) == 0:
@@ -275,6 +277,7 @@ if options.externalCovariance:
 if options.binByBinStat:
   hkstat = f['hkstat']
   kstat = maketensor(hkstat)
+  kstat = kstat/options.scaleBinByBinStat**2
 if sparse:
   norm_sparse = makesparsetensor(hnorm_sparse)
   logk_sparse = makesparsetensor(hlogk_sparse)

@@ -22,6 +22,7 @@ from HiggsAnalysis.CombinedLimit.lsr1trustobs import SR1TrustExact
 import scipy
 import math
 import time
+import hashlib
 
 
 # import ROOT with a fix to get batch mode (http://root.cern.ch/phpBB3/viewtopic.php?t=3198)
@@ -333,6 +334,14 @@ x = tf.Variable(xdefault, name="x")
 xpoi = x[:npoi]
 theta = x[npoi:]
 
+#initialize tf session
+if options.nThreads>0:
+  config = tf.ConfigProto(intra_op_parallelism_threads=options.nThreads, inter_op_parallelism_threads=options.nThreads)
+else:
+  config = None
+
+sess = tf.Session(config=config)
+
 if options.unblind and not options.yes_i_really_really_mean_it:
   raise RuntimeError("to unblind add --yes-i-really-really-mean-it")
 
@@ -340,8 +349,21 @@ if options.toys == 0 and options.pseudodata is None and not options.unblind:
   # hardcoded random blinding for now
   thetarng = np.zeros((nsyst,), dtype=np.float64)
 
-  np.random.seed()
+  # check if dataset is an integer and use this to choose the random seed
+  is_dataobs_int = tf.reduce_all(tf.equal(data_obs, tf.floor(data_obs))).eval(session=sess)
+  print("is_dataobs_int : %r, using this to choose random seed" % is_dataobs_int)
+
+  # backup and restore the initial random generator state
+  state = np.random.get_state()
+
+  #FIXME should use seed seq here, but not available in older numy versions
+  seed_string = "get_random_seed_for_integer_dataset" if is_dataobs_int else "get_random_seed_for_weighted_dataset"
+  offset_seed = int(hashlib.sha256(seed_string).hexdigest()[:8], 16)
+  np.random.seed(offset_seed)
   offset = np.random.normal(loc=0., scale=50.)
+
+  np.random.set_state(state)
+
   for isyst, syst in enumerate(systs):
 
     if syst.startswith("massShift"):
@@ -1666,14 +1688,6 @@ def dosmoothnessfit(n=0,lregouts=None,flatregcov=None,lidxs=None,outcov=None,dop
 ntoys = options.toys
 if ntoys <= 0:
   ntoys = 1
-
-#initialize tf session
-if options.nThreads>0:
-  config = tf.ConfigProto(intra_op_parallelism_threads=options.nThreads, inter_op_parallelism_threads=options.nThreads)
-else:
-  config = None
-
-sess = tf.Session(config=config)
 
 #note that initializing all variables also triggers reading the hdf5 arrays from disk and populating the caches
 print("initializing variables (this will trigger loading of large arrays from disk)")

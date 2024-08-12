@@ -357,7 +357,7 @@ if options.toys == 0 and options.pseudodata is None and not options.unblind:
   state = np.random.get_state()
 
   #FIXME should use seed seq here, but not available in older numy versions
-  seed_string = "get_random_seed_for_integer_dataset" if is_dataobs_int else "get_random_seed_for_weighted_dataset"
+  seed_string = "get_random_seed_for_integer_dataset_v2" if is_dataobs_int else "get_random_seed_for_weighted_dataset_v2"
   offset_seed = int(hashlib.sha256(seed_string).hexdigest()[:8], 16)
   np.random.seed(offset_seed)
   offset = np.random.normal(loc=0., scale=50.)

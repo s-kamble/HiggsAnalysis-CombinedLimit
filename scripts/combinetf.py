@@ -91,7 +91,8 @@ parser.add_option("","--doJacobian", default = False, action='store_true', help=
 parser.add_option("","--skipNullExpBins", default = False, action='store_true', help="skip bins with zero expected events in likelihood")
 parser.add_option("","--globalImpacts", default = False, action='store_true', help="compute impacts in terms of variations of global observables (as opposed to nuisance parameters directly)")
 parser.add_option("","--scaleBinByBinStat", default=-1., type=float, help="scale bin by bin stat")
-parser.add_option("","--unblind", default=False, action="store_true", help="unblind mass values")
+parser.add_option("","--unblind-value", default=False, action="store_true", help="unblind mass values")
+parser.add_option("","--unblind-fit-result", default=False, action="store_true", help="unblind mass values in fit results (but not in printout)")
 parser.add_option("","--yes-i-really-really-mean-it", default=False, action="store_true", help="really unblind mass values")
 
 (options, args) = parser.parse_args()
@@ -342,10 +343,21 @@ else:
 
 sess = tf.Session(config=config)
 
-if options.unblind and not options.yes_i_really_really_mean_it:
+if options.unblind_value and not options.yes_i_really_really_mean_it:
   raise RuntimeError("to unblind add --yes-i-really-really-mean-it")
 
-if options.toys == 0 and options.pseudodata is None and not options.unblind:
+if options.unblind_fit_result and not options.yes_i_really_really_mean_it:
+  raise RuntimeError("to unblind add --yes-i-really-really-mean-it")
+
+if options.unblind_value and not options.unblind_fit_result:
+  raise RuntimeError("Can't unblind value without also unblinding fit result!")
+
+do_blinding = options.toys == 0 and options.pseudodata is None
+
+def is_blind(syst):
+  return syst.startswith("massShiftW")
+
+if do_blinding and not (options.unblind_fit_result and options.unblind_value):
   # hardcoded random blinding for now
   thetarng = np.zeros((nsyst,), dtype=np.float64)
 
@@ -360,19 +372,23 @@ if options.toys == 0 and options.pseudodata is None and not options.unblind:
   seed_string = "get_random_seed_for_integer_dataset_v4" if is_dataobs_int else "get_random_seed_for_weighted_dataset_v4"
   offset_seed = int(hashlib.sha256(seed_string).hexdigest()[:8], 16)
   np.random.seed(offset_seed)
-  offset = np.random.normal(loc=0., scale=5.)
+  blinding_offset = np.random.normal(loc=0., scale=5.)
 
   np.random.set_state(state)
 
   for isyst, syst in enumerate(systs):
 
-    if syst.startswith("massShiftW"):
+    if is_blind(syst):
       print("blinding syst:", syst)
-      thetarng[isyst] = offset
+      thetarng[isyst] = blinding_offset
 
   thetarng = tf.constant(thetarng, dtype=dtype)
 
-  thetafit = theta + thetarng
+  if options.unblind_fit_result:
+    thetafit = theta
+  else:
+    thetafit = theta + thetarng
+
 else:
   thetafit = theta
 
@@ -1939,6 +1955,8 @@ for itoy in range(ntoys):
     sess.run(nexpnomassign)
     if dofit:
       minimize(evs,UTval)
+
+    print("done minimization")
       
     #get fit output
     xval, outvalss, thetavals, theta0vals, nllval, nllvalfull = sess.run([x,outputs,theta,theta0,l,lfull])
@@ -2239,6 +2257,8 @@ for itoy in range(ntoys):
       toutminosdown[0] = minosdown
       toutgenval[0] = outgenval
       if itoy==0:
+        if do_blinding and options.unblind_fit_result and not options.unblind_value:
+          outval = -99.
         print('%s = %e +- %f (+%f -%f)' % (name,outval,outma,minosup,minosdown))
 
   for output,outputname,outchisq,toutchisq,toutndof in zip(outputs,outputnames,outchisqs,toutchisqs,toutndofs):
@@ -2254,6 +2274,11 @@ for itoy in range(ntoys):
     tthetaminosdown[0] = minosdown
     tthetagenval[0] = thetagenval
     if itoy==0:
+      if do_blinding and options.unblind_fit_result and not options.unblind_value:
+        if is_blind(syst):
+          # sign flip here to be consistent with blinding in the fit
+          print("doing blinding in output", syst)
+          thetaval -= blinding_offset
       print('%s = %f +- %f (+%f -%f) (%s_In = %f)' % (syst, thetaval, sigma, minosup,minosdown,syst,theta0val))
     
   for rtchisq,rtndof,rtstatus,tsmoothchisq,tsmoothndof,tsmoothstatus in zip(rtchisqs,rtndofs,rtstatuses,tsmoothchisqs,tsmoothndofs,tsmoothstatuses):

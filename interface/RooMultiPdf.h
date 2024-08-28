@@ -26,7 +26,7 @@
 class RooAbsArg;
 class RooAbsPdf;
 class RooAbsReal;
-class RooRealProxy;
+//class RooRealProxy;  // RooRealProxy is now a type alias provided by ROOT, the forward declaration is unnecessary and causes the conflict.
 class RooArgList;
 
 using namespace std;

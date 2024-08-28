@@ -114,7 +114,7 @@ namespace { unsigned long CachingSimNLLEvalCount = 0; }
 
 cacheutils::ArgSetChecker::ArgSetChecker(const RooAbsCollection &set) 
 {
-    std::auto_ptr<TIterator> iter(set.createIterator());
+    std::unique_ptr<TIterator> iter(set.createIterator());
     for (RooAbsArg *a  = dynamic_cast<RooAbsArg *>(iter->Next()); 
                     a != 0; 
                     a  = dynamic_cast<RooAbsArg *>(iter->Next())) {
@@ -176,7 +176,7 @@ cacheutils::ValuesCache::ValuesCache(const RooAbsReal &pdf, const RooArgSet &obs
     directMode_(false)
 {
     assert(size <= MaxItems_);
-    std::auto_ptr<RooArgSet> params(pdf.getParameters(obs));
+    std::unique_ptr<RooArgSet> params(pdf.getParameters(obs));
     //std::cout << "Parameters for pdf " << pdf.GetName() << " (" << pdf.ClassName() << "):"; params->Print("");
     items[0] = new Item(*params);
 }
@@ -476,7 +476,7 @@ cacheutils::makeCachingPdf(RooAbsReal *pdf, const RooArgSet *obs) {
     } else if (cbNll && typeid(*pdf) == typeid(RooCBShape)) {
         return new CachingCBPdf(pdf, obs);
     } else if (gaussNll && typeid(*pdf) == typeid(RooExponential)) {
-	std::auto_ptr<RooArgSet> params(pdf->getParameters(obs));
+	std::unique_ptr<RooArgSet> params(pdf->getParameters(obs));
 	if(params->getSize()!=1) {return new CachingPdf(pdf,obs);}
         return new CachingExpoPdf(pdf, obs);
     } else if (gaussNll && typeid(*pdf) == typeid(RooPower)) {
@@ -564,8 +564,8 @@ cacheutils::CachingAddNLL::setup_()
         throw std::invalid_argument(errmsg);
     }
 
-    std::auto_ptr<RooArgSet> params(pdf_->getParameters(*data_));
-    std::auto_ptr<TIterator> iter(params->createIterator());
+    std::unique_ptr<RooArgSet> params(pdf_->getParameters(*data_));
+    std::unique_ptr<TIterator> iter(params->createIterator());
     for (RooAbsArg *a = (RooAbsArg *) iter->Next(); a != 0; a = (RooAbsArg *) iter->Next()) {
         RooRealVar *rrv = dynamic_cast<RooRealVar *>(a);
         //if (rrv != 0 && !rrv->isConstant()) params_.add(*rrv);
@@ -844,6 +844,7 @@ cacheutils::CachingSimNLL::CachingSimNLL(RooSimultaneous *pdf, RooAbsData *data,
 }
 
 cacheutils::CachingSimNLL::CachingSimNLL(const CachingSimNLL &other, const char *name) :
+    RooAbsReal{other, name},
     pdfOriginal_(other.pdfOriginal_),
     dataOriginal_(other.dataOriginal_),
     nuis_(other.nuis_),
@@ -935,7 +936,7 @@ cacheutils::CachingSimNLL::setup_()
                 constrainZeroPoints_.push_back(0);
             }
             //std::cout << "Constraint pdf: " << constraints.at(i)->GetName() << std::endl;
-            std::auto_ptr<RooArgSet> params(pdfi->getParameters(*dataOriginal_));
+            std::unique_ptr<RooArgSet> params(pdfi->getParameters(*dataOriginal_));
             params_.add(*params, false);
         }
         for (const auto & p : constraintsByType) {
@@ -944,7 +945,7 @@ cacheutils::CachingSimNLL::setup_()
     } else {
         std::cerr << "PDF didn't factorize!" << std::endl;
         std::cout << "Parameters: " << std::endl;
-        std::auto_ptr<RooArgSet> params(pdfclone->getParameters(*dataOriginal_));
+        std::unique_ptr<RooArgSet> params(pdfclone->getParameters(*dataOriginal_));
         params->Print("V");
         std::cout << "Obs: " << std::endl;
         dataOriginal_->get()->Print("V");
@@ -953,7 +954,7 @@ cacheutils::CachingSimNLL::setup_()
     }
 
     
-    std::auto_ptr<RooAbsCategoryLValue> catClone((RooAbsCategoryLValue*) simpdf->indexCat().Clone());
+    std::unique_ptr<RooAbsCategoryLValue> catClone((RooAbsCategoryLValue*) simpdf->indexCat().Clone());
     pdfs_.resize(catClone->numBins(NULL), 0);
     //dataSets_.reset(dataOriginal_->split(pdfOriginal_->indexCat(), true));
     datasets_.resize(pdfs_.size(), 0);
@@ -1073,7 +1074,7 @@ cacheutils::CachingSimNLL::setData(const RooAbsData &data)
 void cacheutils::CachingSimNLL::splitWithWeights(const RooAbsData &data, const RooAbsCategory& splitCat, Bool_t createEmptyDataSets) {
     RooCategory *cat = dynamic_cast<RooCategory *>(data.get()->find(splitCat.GetName()));
     if (cat == 0) throw std::logic_error("Error: no category");
-    std::auto_ptr<RooAbsCategoryLValue> catClone((RooAbsCategoryLValue*) splitCat.Clone());
+    std::unique_ptr<RooAbsCategoryLValue> catClone((RooAbsCategoryLValue*) splitCat.Clone());
     int nb = cat->numBins((const char *)0), ne = data.numEntries();
     RooArgSet obs(*data.get()); obs.remove(*cat, true, true);
     RooRealVar weight("_weight_","",1);
@@ -1095,7 +1096,7 @@ void cacheutils::CachingSimNLL::splitWithWeights(const RooAbsData &data, const R
             catClone->setBin(ib);
             RooAbsPdf *pdf = pdfOriginal_->getPdf(catClone->getLabel());
             if (pdf) {
-                std::auto_ptr<RooArgSet> myobs(pdf->getObservables(obs));
+                std::unique_ptr<RooArgSet> myobs(pdf->getObservables(obs));
                 myobs->add(weight);
                 //std::cout << "Observables for bin " << ib << ":"; myobs->Print("");
                 datasets_[ib] = new RooDataSet("", "", *myobs, "_weight_");

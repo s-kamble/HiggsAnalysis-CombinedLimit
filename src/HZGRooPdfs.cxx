@@ -591,49 +591,49 @@ namespace {
 	       gaus_b*s*poly2 +
 	       rootpiover2*(poly3*erf_a - poly4*erf_b ) )/amb;    
   }
-  double sixth(const double x, const double m, const double s) {
-    const double root2 = sqrt(2);
-    const double rootpiover2 = sqrt(M_PI/2.0);
-    const double erf_parm = (m-x)/(root2*s);
-    const double gaus = exp(-0.5*(m-x)*(m-x)/(s*s));
+//   double sixth(const double x, const double m, const double s) {
+//     const double root2 = sqrt(2);
+//     const double rootpiover2 = sqrt(M_PI/2.0);
+//     const double erf_parm = (m-x)/(root2*s);
+//     const double gaus = exp(-0.5*(m-x)*(m-x)/(s*s));
     
-    const double x2 = pow(x,2);
-    const double x3 = x2*x;
-    const double x4 = x3*x;
-    const double x5 = x4*x;
-    const double x6 = x5*x;
+//     const double x2 = pow(x,2);
+//     const double x3 = x2*x;
+//     const double x4 = x3*x;
+//     const double x5 = x4*x;
+//     const double x6 = x5*x;
 
-    const double mmx2 = pow(m-x,2);
-    //const double mmx3 = mmx2*(m-x);
-    //const double mmx4 = mmx3*(m-x);
-    //const double mmx5 = mmx4*(m-x);
+//     const double mmx2 = pow(m-x,2);
+//     //const double mmx3 = mmx2*(m-x);
+//     //const double mmx4 = mmx3*(m-x);
+//     //const double mmx5 = mmx4*(m-x);
 
-    const double m2 = pow(m,2);
-    const double m3 = m2*m;
-    const double m4 = m3*m;
-    const double m5 = m4*m;
-    const double m6 = m5*m;
+//     const double m2 = pow(m,2);
+//     const double m3 = m2*m;
+//     const double m4 = m3*m;
+//     const double m5 = m4*m;
+//     const double m6 = m5*m;
 
-    const double s2 = pow(s,2);
-    const double s3 = s2*s;
-    const double s4 = s3*s;
-    const double s5 = s4*s;
-    const double s6 = s5*s;
+//     const double s2 = pow(s,2);
+//     const double s3 = s2*s;
+//     const double s4 = s3*s;
+//     const double s5 = s4*s;
+//     const double s6 = s5*s;
     
-    const double poly1 =
-      ( (3.0*s2 + mmx2)*(11.0*s2 + mmx2)*(m-x) );
-    const double poly2 =
-      ( m6 +15.0*m4*s2 + 45.0*m2*s4 + 15.0*s6 - 6.0*m*(m4 + 10.0*m2*s2 + 15.0*s4)*x +
-15.0*(m4 + 6.0*m2*s2 +3.0*s4)*x2 - 20.0*m*(m2 + 3.0*s2)*x3 +
-15.0*(m2+s2)*x4 - 6.0*m*x5 + x6 );
-    const double poly3 =
-      ( m6 + 15.0*s6 - 6.0*m5*x + 45.0*s4*x2 + 15.0*s2*x4 + x6 +15.0*m4*(s2 + x2) -
-20.0*m3*(3.0*s2*x + x3) +15*m2*(3.0*s4 + 6.0*s2*x2 + x4) -
-6.0*m*(15.0*s4*x + 10.0*s2*x3 + x5) );
-    return ( s*gaus*( -s*poly1 +
-gaus*rootpiover2*(m-x)*poly2 -
-gaus*rootpiover2*poly3*erf(erf_parm) ) );
-  }
+//     const double poly1 =
+//       ( (3.0*s2 + mmx2)*(11.0*s2 + mmx2)*(m-x) );
+//     const double poly2 =
+//       ( m6 +15.0*m4*s2 + 45.0*m2*s4 + 15.0*s6 - 6.0*m*(m4 + 10.0*m2*s2 + 15.0*s4)*x +
+// 15.0*(m4 + 6.0*m2*s2 +3.0*s4)*x2 - 20.0*m*(m2 + 3.0*s2)*x3 +
+// 15.0*(m2+s2)*x4 - 6.0*m*x5 + x6 );
+//     const double poly3 =
+//       ( m6 + 15.0*s6 - 6.0*m5*x + 45.0*s4*x2 + 15.0*s2*x4 + x6 +15.0*m4*(s2 + x2) -
+// 20.0*m3*(3.0*s2*x + x3) +15*m2*(3.0*s4 + 6.0*s2*x2 + x4) -
+// 6.0*m*(15.0*s4*x + 10.0*s2*x3 + x5) );
+//     return ( s*gaus*( -s*poly1 +
+// gaus*rootpiover2*(m-x)*poly2 -
+// gaus*rootpiover2*poly3*erf(erf_parm) ) );
+//   }
 
   double poly_conv(const double x, const double mean,
 		   const double sigma, const double a,

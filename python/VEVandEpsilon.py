@@ -14,23 +14,23 @@ class MepsHiggs(SMLikeHiggsModel):
             if po.startswith("higgsMassRange="):
                 self.floatMass = True
                 self.mHRange = po.replace("higgsMassRange=","").split(",")
-                print 'The Higgs mass range:', self.mHRange
+                print('The Higgs mass range:', self.mHRange)
                 if len(self.mHRange) != 2:
-                    raise RuntimeError, "Higgs mass range definition requires two extrema."
+                    raise RuntimeError("Higgs mass range definition requires two extrema.")
                 elif float(self.mHRange[0]) >= float(self.mHRange[1]):
-                    raise RuntimeError, "Extrema for Higgs mass range defined with inverterd order. Second must be larger the first."
+                    raise RuntimeError("Extrema for Higgs mass range defined with inverterd order. Second must be larger the first.")
             if po.startswith("MRange="):
                 self.MRange = po.replace("MRange=","").split(":")
                 if len(self.MRange) != 2:
-                    raise RuntimeError, "M range requires minimal and maximal value"
+                    raise RuntimeError( "M range requires minimal and maximal value")
                 elif float(self.MRange[0]) >= float(self.MRange[1]):
-                    raise RuntimeError, "minimal and maximal range swapped. Second value must be larger first one"
+                    raise RuntimeError("minimal and maximal range swapped. Second value must be larger first one")
             if po.startswith("epsRange="):
                 self.epsRange = po.replace("epsRange=","").split(":")
                 if len(self.epsRange) != 2:
-                    raise RuntimeError, "epsilon range requires minimal and maximal value"
+                    raise RuntimeError("epsilon range requires minimal and maximal value")
                 elif float(self.epsRange[0]) >= float(self.epsRange[1]):
-                    raise RuntimeError, "minimal and maximal range swapped. Second value must be larger first one"
+                    raise RuntimeError("minimal and maximal range swapped. Second value must be larger first one")
     def doParametersOfInterest(self):
         """Create POI out of signal strength and MH"""
         # --- Signal Strength as only POI --- 
@@ -72,12 +72,12 @@ class MepsHiggs(SMLikeHiggsModel):
 
             if name in ('W','Z'):
 #                # Ellis cv == v (mv^(2 e)/M^(1 + 2 e))
-		 self.modelBuilder.factory_(
+                self.modelBuilder.factory_(
                     	'expr::C%(name)s("@0 * TMath::Power(@3,2*@2) / TMath::Power(@1,1+2*@2)", SM_VEV, M, eps, M%(name)s_MSbar)' % locals() )
             else:
 #                # Ellis cf == v (mf^e/M^(1 + e))
-		self.modelBuilder.factory_(
-			'expr::C%(name)s("@0 * TMath::Power(@3,@2) / TMath::Power(@1,1+@2)", SM_VEV, M, eps, M%(name)s_MSbar)' % locals() )
+                self.modelBuilder.factory_(
+			            'expr::C%(name)s("@0 * TMath::Power(@3,@2) / TMath::Power(@1,1+@2)", SM_VEV, M, eps, M%(name)s_MSbar)' % locals() )
 
         self.productionScaling = {
             'ttH':'Ctop',
@@ -132,8 +132,8 @@ class MepsHiggs(SMLikeHiggsModel):
             return name
 
         if production == "VH":
-            print "WARNING: You are trying to use a VH production mode in a model that needs WH and ZH separately. "\
-            "The best I can do is to scale [%(production)s, %(decay)s, %(energy)s] with the decay BR only but this is wrong..." % locals()
+            print("WARNING: You are trying to use a VH production mode in a model that needs WH and ZH separately. "\
+            "The best I can do is to scale [%(production)s, %(decay)s, %(energy)s] with the decay BR only but this is wrong..." % locals())
             self.modelBuilder.factory_('expr::%(name)s("1.0*@0", Meps_BRscal_%(decay)s)' % locals())
             return name
 
@@ -155,17 +155,17 @@ class ResolvedC6(SMLikeHiggsModel):
             if po.startswith("higgsMassRange="):
                 self.floatMass = True
                 self.mHRange = po.replace("higgsMassRange=","").split(",")
-                print 'The Higgs mass range:', self.mHRange
+                print('The Higgs mass range:', self.mHRange)
                 if len(self.mHRange) != 2:
-                    raise RuntimeError, "Higgs mass range definition requires two extrema."
+                    raise RuntimeError("Higgs mass range definition requires two extrema.")
                 elif float(self.mHRange[0]) >= float(self.mHRange[1]):
-                    raise RuntimeError, "Extrema for Higgs mass range defined with inverterd order. Second must be larger the first."
+                    raise RuntimeError("Extrema for Higgs mass range defined with inverterd order. Second must be larger the first.")
             if po.startswith("MRange="):
                 self.MRange = po.replace("MRange=","").split(":")
                 if len(self.MRange) != 2:
-                    raise RuntimeError, "M range requires minimal and maximal value"
+                    raise RuntimeError("M range requires minimal and maximal value")
                 elif float(self.MRange[0]) >= float(self.MRange[1]):
-                    raise RuntimeError, "minimal and maximal range swapped. Second value must be larger first one"
+                    raise RuntimeError("minimal and maximal range swapped. Second value must be larger first one")
     def doParametersOfInterest(self):
         """Create POI out of signal strength and MH"""
         # --- Signal Strength as only POI --- 
@@ -248,8 +248,8 @@ class ResolvedC6(SMLikeHiggsModel):
             return name
 
         if production == "VH":
-            print "WARNING: You are trying to use a VH production mode in a model that needs WH and ZH separately. "\
-            "The best I can do is to scale [%(production)s, %(decay)s, %(energy)s] with the decay BR only but this is wrong..." % locals()
+            print("WARNING: You are trying to use a VH production mode in a model that needs WH and ZH separately. "\
+            "The best I can do is to scale [%(production)s, %(decay)s, %(energy)s] with the decay BR only but this is wrong..." % locals())
             self.modelBuilder.factory_('expr::%(name)s("1.0*@0", wztbtm_BRscal_%(decay)s)' % locals())
             return name
 

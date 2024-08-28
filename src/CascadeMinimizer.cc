@@ -486,7 +486,7 @@ bool CascadeMinimizer::multipleMinimize(const RooArgSet &reallyCleanParameters, 
     }
 
     // keep hold of best fitted parameters! 
-    std::auto_ptr<RooArgSet> params;
+    std::unique_ptr<RooArgSet> params;
     params.reset(nll_.getParameters((const RooArgSet *)0) );
     params->remove(CascadeMinimizerGlobalConfigs::O().pdfCategories);
 
@@ -532,7 +532,7 @@ bool CascadeMinimizer::multipleMinimize(const RooArgSet &reallyCleanParameters, 
 	     for (std::vector<int>::iterator it = cit.begin();
 	         it!=cit.end(); it++){
 
-		 isValidCombo *= (contributingIndeces)[pdfIndex][*it];
+		 isValidCombo &= (contributingIndeces)[pdfIndex][*it];
 		 if (!isValidCombo ) /*&& runShortCombinations)*/ continue;
 
 	     	 fPdf = (RooCategory*) pdfCategoryIndeces.at(pdfIndex);

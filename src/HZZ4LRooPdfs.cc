@@ -4010,10 +4010,14 @@ ClassImp(RooCPSHighMassGGH)
    }
 
 
-   Double_t bwHM = x / ( TMath::Power( TMath::Power(x,2) - TMath::Power(mH+delta,2) , 2 ) + TMath::Power(x,2)*TMath::Power(effKPrime*width,2) ); 
+   // Cast the "x" proxy to double only once to avoid overhead and ambiguous
+   // overloads the TComplex operators.
+   const double xVal = x;
+
+   Double_t bwHM = xVal / ( TMath::Power( TMath::Power(xVal,2) - TMath::Power(mH+delta,2) , 2 ) + TMath::Power(xVal,2)*TMath::Power(effKPrime*width,2) ); 
 
    Double_t splineFactor;
-   if (x<1850) splineFactor = Spline(x);
+   if (xVal<1850) splineFactor = Spline(xVal);
    else splineFactor = Spline(1850);
 
    Double_t signal = bwHM*splineFactor;
@@ -4024,9 +4028,9 @@ ClassImp(RooCPSHighMassGGH)
    TComplex M = MSquared.Sqrt(MSquared);
    TComplex Exp1 = MSquared.Exp((TComplex)alpha);
    TComplex Exp2 = MSquared.Exp(-(TComplex)alpha);
-   TComplex Exp3 = MSquared.Exp(-x*(TComplex)alpha/M);
+   TComplex Exp3 = MSquared.Exp(-xVal*(TComplex)alpha/M);
 
-   double interference = -r*(1-TMath::Exp(-beta*(x-150.)/mH_eff))*((Exp1/(x-M)-Exp2/(x+M))*Exp3).Re();
+   double interference = -r*(1-TMath::Exp(-beta*(xVal-150.)/mH_eff))*((Exp1/(xVal-M)-Exp2/(xVal+M))*Exp3).Re();
 
    Double_t fValue = signal + IntStr*interference/( TMath::Sqrt(1-BRnew) );
    if (fValue > 0) return fValue;
@@ -4655,7 +4659,11 @@ ClassImp(RooBWHighMassGGH)
    Double_t r = getR(mH,effKPrime);
    Double_t beta = getBeta(mH,effKPrime);
 
-   Double_t bwHM = x / ( TMath::Power( TMath::Power(x,2) - TMath::Power(mH+delta,2) , 2 ) + TMath::Power(x,2)*TMath::Power(effKPrime*width,2) ); 
+   // Cast the "x" proxy to double only once to avoid overhead and ambiguous
+   // overloads the TComplex operators.
+   const double xVal = x;
+
+   Double_t bwHM = xVal / ( TMath::Power( TMath::Power(xVal,2) - TMath::Power(mH+delta,2) , 2 ) + TMath::Power(xVal,2)*TMath::Power(effKPrime*width,2) ); 
    Double_t signal = bwHM;
      
    Double_t k=0.25;
@@ -4666,7 +4674,7 @@ ClassImp(RooBWHighMassGGH)
    TComplex Exp2 = MSquared.Exp(-(TComplex)alpha);
    TComplex Exp3 = MSquared.Exp(-x*(TComplex)alpha/M);
 
-   double interference = -r*(1-TMath::Exp(-beta*(x-150.)/mH_eff))*((Exp1/(x-M)-Exp2/(x+M))*Exp3).Re();
+   double interference = -r*(1-TMath::Exp(-beta*(xVal-150.)/mH_eff))*((Exp1/(xVal-M)-Exp2/(xVal+M))*Exp3).Re();
 
    Double_t fValue = signal + IntStr*interference/( TMath::Sqrt(1-BRnew) );
    if (fValue > 0) return fValue;
@@ -6553,10 +6561,14 @@ ClassImp(RooCPSHighMassVBF)
    }
 
 
-   Double_t bwHM = x / ( TMath::Power( TMath::Power(x,2) - TMath::Power(mH+delta,2) , 2 ) + TMath::Power(x,2)*TMath::Power(effKPrime*width,2) ); 
+   // Cast the "x" proxy to double only once to avoid overhead and ambiguous
+   // overloads the TComplex operators.
+   const double xVal = x;
+
+   Double_t bwHM = xVal / ( TMath::Power( TMath::Power(xVal,2) - TMath::Power(mH+delta,2) , 2 ) + TMath::Power(xVal,2)*TMath::Power(effKPrime*width,2) ); 
 
    Double_t splineFactor;
-   if (x<1850) splineFactor = Spline(x);
+   if (xVal<1850) splineFactor = Spline(xVal);
    else splineFactor = Spline(1850);
 
    Double_t signal = bwHM*splineFactor;
@@ -6567,9 +6579,9 @@ ClassImp(RooCPSHighMassVBF)
    TComplex M = MSquared.Sqrt(MSquared);
    TComplex Exp1 = MSquared.Exp((TComplex)alpha);
    TComplex Exp2 = MSquared.Exp(-(TComplex)alpha);
-   TComplex Exp3 = MSquared.Exp(-x*(TComplex)alpha/M);
+   TComplex Exp3 = MSquared.Exp(-xVal*(TComplex)alpha/M);
 
-   double interference = -r*(1-TMath::Exp(-beta*(x-150.)/mH_eff))*((Exp1/(x-M)-Exp2/(x+M))*Exp3).Re();
+   double interference = -r*(1-TMath::Exp(-beta*(xVal-150.)/mH_eff))*((Exp1/(xVal-M)-Exp2/(xVal+M))*Exp3).Re();
 
    Double_t fValue = signal*(1+IntStr*interference/(bwHM*( TMath::Sqrt(1-BRnew) ))); 
    if (fValue > 0) return fValue;
@@ -7645,13 +7657,16 @@ ClassImp(RooSigPlusInt)
 
  Double_t RooSigPlusInt::evaluate() const 
  { 
+   // Cast the "x" proxy to double only once to avoid overhead and ambiguous
+   // overloads the TComplex operators.
+   const double xVal = x;
 
    Double_t totWidthSF = CSquared/(1-BRnew);
 
    Double_t mH_eff = mH*TMath::Sqrt(1-k*(totWidthSF*width/mH)*(totWidthSF*width/mH));
-
+ 
    Double_t splineFactor = Spline(x);
-   Double_t bwHM = x / ( TMath::Power( TMath::Power(x,2) - TMath::Power(mH+delta,2) , 2 ) + TMath::Power(x,2)*TMath::Power(totWidthSF*width,2) ); 
+   Double_t bwHM = xVal / ( TMath::Power( TMath::Power(xVal,2) - TMath::Power(mH+delta,2) , 2 ) + TMath::Power(xVal,2)*TMath::Power(totWidthSF*width,2) ); 
 
    Double_t signal = splineFactor*bwHM;
       
@@ -7659,13 +7674,13 @@ ClassImp(RooSigPlusInt)
    TComplex M = MSquared.Sqrt(MSquared);
    TComplex Exp1 = MSquared.Exp((TComplex)alpha);
    TComplex Exp2 = MSquared.Exp(-(TComplex)alpha);
-   TComplex Exp3 = MSquared.Exp(-x*(TComplex)alpha/M);
+   TComplex Exp3 = MSquared.Exp(-xVal*(TComplex)alpha/M);
 
-   double interference = -r*sqrt(1/1-BRnew)*(1-TMath::Exp(-beta*(x-150.)/mH_eff))*((Exp1/(x-M)-Exp2/(x+M))*Exp3).Re();
+   double interference = -r*sqrt(1/1-BRnew)*(1-TMath::Exp(-beta*(xVal-150.)/mH_eff))*((Exp1/(xVal-M)-Exp2/(xVal+M))*Exp3).Re();
 
    return signal + interference;   
    
- } 
+ }  
 
 
 Double_t RooSigPlusInt::Spline(Double_t xx) const{

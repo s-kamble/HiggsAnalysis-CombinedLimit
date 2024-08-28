@@ -693,6 +693,7 @@ Double_t RooBSpline::analyticalIntegralWN(Int_t code, const RooArgSet* /*normSet
 // 
 
 
+
      // Calculate integral internally from appropriate integral cache
    
      // note: rangeName implicit encoded in code: see _cacheMgr.setObj in getPartIntList...
@@ -700,10 +701,17 @@ Double_t RooBSpline::analyticalIntegralWN(Int_t code, const RooArgSet* /*normSet
      if (cache==0) {
        // cache got sterilized, trigger repopulation of this slot, then try again...
        //std::cout << "Cache got sterilized" << std::endl;
-       std::auto_ptr<RooArgSet> vars( getParameters(RooArgSet()) );
-       std::auto_ptr<RooArgSet> iset(  _cacheMgr.nameSet2ByIndex(code-2)->select(*vars) );
+       std::unique_ptr<RooArgSet> vars( getParameters(RooArgSet()) );
        RooArgSet dummy;
+#if ROOT_VERSION_CODE < ROOT_VERSION(6,26,0)
+       std::unique_ptr<RooArgSet> iset(  _cacheMgr.nameSet2ByIndex(code-2)->select(*vars) );
        Int_t code2 = getAnalyticalIntegral(*iset,dummy,rangeName);
+#else
+       // In ROOT 6.26, the RooNameSet was removed and the "selectFromSet*"
+       // functions were introduced to replace its functionality
+       RooArgSet iset{  _cacheMgr.selectFromSet2(*vars, code-2) };
+       Int_t code2 = getAnalyticalIntegral(iset,dummy,rangeName);
+#endif
        assert(code==code2); // must have revived the right (sterilized) slot...
        return analyticalIntegral(code2,rangeName);
      }
@@ -1495,7 +1503,8 @@ RooStarMomentMorph::CacheElem* RooStarMomentMorph::getCache(const RooArgSet* /*n
       mypos[j] = new RooAddition(myposName.c_str(),myposName.c_str(),meanList,coefList2);
       myrms[j] = new RooAddition(myrmsName.c_str(),myrmsName.c_str(),rmsList,coefList3);
       
-      ownedComps.add(RooArgSet(*myrms[j],*mypos[j])) ;
+      ownedComps.add(*myrms[j]) ;
+      ownedComps.add(*mypos[j]) ;
     }
   }
 
@@ -1524,18 +1533,35 @@ RooStarMomentMorph::CacheElem* RooStarMomentMorph::getCache(const RooArgSet* /*n
       std::string slopeName  = Form("%s_slope_%d_%d", GetName(),i,j);
       std::string offsetName = Form("%s_offset_%d_%d",GetName(),i,j);
 
-      slope[sij(i,j)]  = _useHorizMorph ? 
-	(RooAbsReal*)new RooFormulaVar(slopeName.c_str(),"@0/@1",
-				       RooArgList(*sigmarv[sij(i,j)],*myrms[j])) : 
-	(RooAbsReal*)new RooConstVar(slopeName.c_str(),slopeName.c_str(),1.0); // 
+  //     slope[sij(i,j)]  = _useHorizMorph ? 
+	// (RooAbsReal*)new RooFormulaVar(slopeName.c_str(),"@0/@1",
+	// 			       RooArgList(*sigmarv[sij(i,j)],*myrms[j])) : 
+	// (RooAbsReal*)new RooConstVar(slopeName.c_str(),slopeName.c_str(),1.0); // 
       
       
-      offsetVar[sij(i,j)] = _useHorizMorph ? 
-	(RooAbsReal*)new RooFormulaVar(offsetName.c_str(),"@0-(@1*@2)",
-				       RooArgList(*meanrv[sij(i,j)],*mypos[j],*slope[sij(i,j)])) : 	
-	(RooAbsReal*)new RooConstVar(offsetName.c_str(),offsetName.c_str(),0.0); // 
-      
-      ownedComps.add(RooArgSet(*slope[sij(i,j)],*offsetVar[sij(i,j)])) ;
+  //     offsetVar[sij(i,j)] = _useHorizMorph ? 
+	// (RooAbsReal*)new RooFormulaVar(offsetName.c_str(),"@0-(@1*@2)",
+	// 			       RooArgList(*meanrv[sij(i,j)],*mypos[j],*slope[sij(i,j)])) : 	
+	// (RooAbsReal*)new RooConstVar(offsetName.c_str(),offsetName.c_str(),0.0); // 
+
+    if (_useHorizMorph) {
+	  RooArgList slopeInputs;
+	  slopeInputs.add(*sigmarv[sij(i,j)]);
+	  slopeInputs.add(*myrms[j]);
+          slope[sij(i,j)] = new RooFormulaVar(slopeName.c_str(),"@0/@1", slopeInputs);
+	  RooArgList offsetInputs;
+	  offsetInputs.add(*meanrv[sij(i,j)]);
+	  offsetInputs.add(*mypos[j]);
+	  offsetInputs.add(*slope[sij(i,j)]);
+          offsetVar[sij(i,j)] = new RooFormulaVar(offsetName.c_str(),"@0-(@1*@2)", offsetInputs);
+      } else {
+          slope[sij(i,j)] = new RooConstVar(slopeName.c_str(),slopeName.c_str(),1.0);
+          offsetVar[sij(i,j)] = new RooConstVar(offsetName.c_str(),offsetName.c_str(),0.0);
+      }
+ 
+      // ownedComps.add(RooArgSet(*slope[sij(i,j)],*offsetVar[sij(i,j)])) ;
+      ownedComps.add(*slope[sij(i,j)]);
+      ownedComps.add(*offsetVar[sij(i,j)]);
       
       // linear transformations, so pdf can be renormalized easily
       var = (RooRealVar*)(_obsItr->Next());

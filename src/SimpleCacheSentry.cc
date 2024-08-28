@@ -1,3 +1,4 @@
+
 #include "HiggsAnalysis/CombinedLimit/interface/SimpleCacheSentry.h"
 
 SimpleCacheSentry::SimpleCacheSentry() :  _deps("deps","deps",this)   {}
@@ -25,6 +26,7 @@ SimpleCacheSentry::SimpleCacheSentry(const RooAbsArg &func, const RooArgSet *obs
 }
 
 SimpleCacheSentry::SimpleCacheSentry(const SimpleCacheSentry &other, const char *newname) :
+    RooAbsArg{other, newname},
     _deps("deps",this,other._deps)   
 {
 }
@@ -55,7 +57,7 @@ void SimpleCacheSentry::addFunc(const RooAbsArg &func, const RooArgSet *obs)
 }
 
 Bool_t SimpleCacheSentry::isIdentical(const RooAbsArg& other, 
-            Bool_t /*assumeSameType*/) {
+            Bool_t /*assumeSameType*/) const {
   bool ret = kFALSE;
   SimpleCacheSentry const& otherSentry = dynamic_cast<SimpleCacheSentry const&>(other);
   RooAbsCollection * common = _deps.selectCommon(otherSentry._deps);
@@ -65,4 +67,3 @@ Bool_t SimpleCacheSentry::isIdentical(const RooAbsArg& other,
   delete common;
   return ret;
 }
-

@@ -1,6 +1,7 @@
 #include "HiggsAnalysis/CombinedLimit/interface/ProfiledLikelihoodRatioTestStat.h"
 #include "HiggsAnalysis/CombinedLimit/interface/CloseCoutSentry.h"
 #include <stdexcept>
+#include <RooFitResult.h>  //the full definition of RooFitResult is included in the file ProfiledLikelihoodRatioTestStat.cc before the std::unique_ptr<RooFitResult> is instantiated
 #include <RooRealVar.h>
 
 Double_t ProfiledLikelihoodRatioTestStat::Evaluate(RooAbsData& data, RooArgSet& nullPOI)

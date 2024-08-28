@@ -14,11 +14,11 @@ class C8(SMLikeHiggsModel):
             if po.startswith("higgsMassRange="):
                 self.floatMass = True
                 self.mHRange = po.replace("higgsMassRange=","").split(",")
-                print 'The Higgs mass range:', self.mHRange
+                print("The Higgs mass range:", self.mHRange)
                 if len(self.mHRange) != 2:
-                    raise RuntimeError, "Higgs mass range definition requires two extrema"
+                    raise RuntimeError("Higgs mass range definition requires two extrema")
                 elif float(self.mHRange[0]) >= float(self.mHRange[1]):
-                    raise RuntimeError, "Extrama for Higgs mass range defined with inverterd order. Second must be larger the first"
+                    raise RuntimeError("Extrama for Higgs mass range defined with inverterd order. Second must be larger the first")
             if po == 'doHZg':
                 self.doHZg = True
             if po == 'doHInv':
@@ -31,8 +31,8 @@ class C8(SMLikeHiggsModel):
         self.modelBuilder.doVar("kbottom[1,0.0,3.0]")
         self.modelBuilder.doVar("kgluon[1,0.0,2.0]")
         self.modelBuilder.doVar("kgamma[1,0.0,2.5]")
-	self.modelBuilder.doVar("BRInv[0,0,1]")
-	self.modelBuilder.doVar("BRUndet[0,0,1]")
+        self.modelBuilder.doVar("BRInv[0,0,1]")
+        self.modelBuilder.doVar("BRUndet[0,0,1]")
         pois = 'kV,ktau,ktop,kbottom,kgluon,kgamma,BRInv,BRUndet' 
         if self.doHZg:
             self.modelBuilder.doVar("kZgamma[1,0.0,30.0]")
@@ -87,8 +87,8 @@ class C8(SMLikeHiggsModel):
 
     def getHiggsSignalYieldScale(self,production,decay,energy):
         name = "c8_XSBRscal_%s_%s" % (production,decay)
-        print '[LOFullParametrization::C7]'
-        print name, production, decay, energy
+        print("[LOFullParametrization::C7]")
+        print(name, production, decay, energy)
         if self.modelBuilder.out.function(name) == None:
             XSscal = "kgluon"
             if production in ["WH","ZH","VH","qqH"]: XSscal = "kV"
@@ -115,11 +115,11 @@ class CWidth(SMLikeHiggsModel):
             if po.startswith("higgsMassRange="):
                 self.floatMass = True
                 self.mHRange = po.replace("higgsMassRange=","").split(",")
-                print 'The Higgs mass range:', self.mHRange
+                print("The Higgs mass range:', self.mHRange")
                 if len(self.mHRange) != 2:
-                    raise RuntimeError, "Higgs mass range definition requires two extrema"
+                    raise RuntimeError("Higgs mass range definition requires two extrema")
                 elif float(self.mHRange[0]) >= float(self.mHRange[1]):
-                    raise RuntimeError, "Extrama for Higgs mass range defined with inverterd order. Second must be larger the first"
+                    raise RuntimeError("Extrama for Higgs mass range defined with inverterd order. Second must be larger the first")
             if po == 'doHZg':
                 self.doHZg = True
             if po == 'doHInv':
@@ -135,11 +135,11 @@ class CWidth(SMLikeHiggsModel):
         self.modelBuilder.doVar("kgluon[1,0.0,2.0]")
         self.modelBuilder.doVar("kgamma[1,0.0,2.5]")
         if self.doWidth:
-		self.modelBuilder.doVar("Gscale[1,0,10]")
-            	pois = 'kV,ktau,ktop,kbottom,kgluon,kgamma,Gscale'
-	else:
-		self.modelBuilder.doVar("BRInvUndet[0,0,1]")
-            	pois = 'kV,ktau,ktop,kbottom,kgluon,kgamma,BRInvUndet'
+            self.modelBuilder.doVar("Gscale[1,0,10]")
+            pois = 'kV,ktau,ktop,kbottom,kgluon,kgamma,Gscale'
+        else:
+            self.modelBuilder.doVar("BRInvUndet[0,0,1]")
+            pois = 'kV,ktau,ktop,kbottom,kgluon,kgamma,BRInvUndet'
         if self.doHZg:
             self.modelBuilder.doVar("kZgamma[1,0.0,30.0]")
             pois += ",kZgamma"
@@ -201,11 +201,10 @@ class CWidth(SMLikeHiggsModel):
 #RooRealVar::kgamma = 1  L(0 - 2.5) 
 ############################either generate asimov dataset with kbottom slightly less 1    i.e.  kb=0.999 is fine
 
-
-	if self.doWidth:
+        if self.doWidth:
             self.modelBuilder.factory_('expr::c7_Gscal_tot("(@1+@2+@3+@4+@5+@6)<=@0?@0:0.001",Gscale,c7_Gscal_Vectors, c7_Gscal_tau, c7_Gscal_top, c7_Gscal_bottom, c7_Gscal_gluon, c7_Gscal_gamma)')
             self.modelBuilder.factory_('expr::BRInvUndet("1 - (@1+@2+@3+@4+@5+@6)/@0",c7_Gscal_tot,c7_Gscal_Vectors, c7_Gscal_tau, c7_Gscal_top, c7_Gscal_bottom, c7_Gscal_gluon, c7_Gscal_gamma)')
-	else:
+        else:
             self.modelBuilder.factory_('expr::c7_Gscal_tot("(@1+@2+@3+@4+@5+@6)/(1-@0)",BRInvUndet,c7_Gscal_Vectors, c7_Gscal_tau, c7_Gscal_top, c7_Gscal_bottom, c7_Gscal_gluon, c7_Gscal_gamma)')
 
         ## BRs, normalized to the SM ones: they scale as (partial/partial_SM)^2 / (total/total_SM)^2
@@ -222,8 +221,8 @@ class CWidth(SMLikeHiggsModel):
 
     def getHiggsSignalYieldScale(self,production,decay,energy):
         name = "c7_XSBRscal_%s_%s" % (production,decay)
-        print '[LOFullParametrization::C7]'
-        print name, production, decay, energy
+        print("[LOFullParametrization::C7]")
+        print(name, production, decay, energy)
         if self.modelBuilder.out.function(name) == None:
             XSscal = "kgluon"
             if production in ["WH","ZH","VH","qqH"]: XSscal = "kV"
@@ -242,23 +241,23 @@ class TwoHDM(SMLikeHiggsModel):
     def __init__(self):
         SMLikeHiggsModel.__init__(self) # not using 'super(x,self).__init__' since I don't understand it
         self.floatMass = False
-	self.thdmtype = ['1']  
+        self.thdmtype = ['1']  
     def setPhysicsOptions(self,physOptions):
         for po in physOptions:
             if po.startswith("higgsMassRange="):
                 self.floatMass = True
                 self.mHRange = po.replace("higgsMassRange=","").split(",")
-                print 'The Higgs mass range:', self.mHRange
+                print('The Higgs mass range:', self.mHRange)
                 if len(self.mHRange) != 2:
-                    raise RuntimeError, "Higgs mass range definition requires two extrema"
+                    raise RuntimeError("Higgs mass range definition requires two extrema")
                 elif float(self.mHRange[0]) >= float(self.mHRange[1]):
-                    raise RuntimeError, "Extrama for Higgs mass range defined with inverterd order. Second must be larger the first"
+                    raise RuntimeError("Extrama for Higgs mass range defined with inverterd order. Second must be larger the first")
             if po.startswith("thdmtype="):
                 self.thdmtype= po.replace("thdmtype=","")
                 if len(self.thdmtype) != 1:
-                    raise RuntimeError, "2HDM type requires one value"
+                    raise RuntimeError("2HDM type requires one value")
                 elif int(self.thdmtype[0]) != 1 and int(self.thdmtype[0]) !=2 and int(self.thdmtype[0]) !=3 and int(self.thdmtype[0]) !=4:
-                    raise RuntimeError, "2HDM type must be 1 (default) or 2 or 3 or 4 "
+                    raise RuntimeError("2HDM type must be 1 (default) or 2 or 3 or 4 ")
     def doParametersOfInterest(self):
         """Create POI out of signal strength and MH"""
         self.modelBuilder.doVar("cosbma[0,-1,1]")
@@ -281,31 +280,30 @@ class TwoHDM(SMLikeHiggsModel):
         self.setup()
 
     def setup(self):
-
-	self.modelBuilder.factory_('expr::kV("sqrt(1-@0*@0)",cosbma)')
-	self.modelBuilder.factory_('expr::tana("(@0*@1-@2)/(@1-@0*@2)", tanbeta, cosbma, kV)')
-	self.modelBuilder.factory_('expr::cosa("1/sqrt(1+@0*@0)",tana)')
-	self.modelBuilder.factory_('expr::sinb("tanbeta/sqrt(1+@0*@0)",tanbeta)')
-	self.modelBuilder.factory_('expr::ku("@0/@1", cosa, sinb)')
-	if int(self.thdmtype[0]) == 1: 
-		self.modelBuilder.factory_('expr::kd("@0", ku)')
-		self.modelBuilder.factory_('expr::kl("@0", ku)')
-	elif int(self.thdmtype[0]) == 2: 
-		self.modelBuilder.factory_('expr::cosb("1/sqrt(1+@0*@0)",tanbeta)')
-		self.modelBuilder.factory_('expr::sina("tana/sqrt(1+@0*@0)",tana)')
-		self.modelBuilder.factory_('expr::kd("-@0/@1", sina,cosb)')
-		self.modelBuilder.factory_('expr::kl("@0", kd)')
-	elif int(self.thdmtype[0]) == 3: 
-		self.modelBuilder.factory_('expr::cosb("1/sqrt(1+@0*@0)",tanbeta)')
-		self.modelBuilder.factory_('expr::sina("tana/sqrt(1+@0*@0)",tana)')
-		self.modelBuilder.factory_('expr::kd("@0", ku)')
-		self.modelBuilder.factory_('expr::kl("-@0/@1", sina,cosb)')
-	elif int(self.thdmtype[0]) == 4: 
-		self.modelBuilder.factory_('expr::cosb("1/sqrt(1+@0*@0)",tanbeta)')
-		self.modelBuilder.factory_('expr::sina("tana/sqrt(1+@0*@0)",tana)')
-		self.modelBuilder.factory_('expr::kd("-@0/@1", sina,cosb)')
-		self.modelBuilder.factory_('expr::kl("@0", ku)')
-        self.decayScaling = {
+        self.modelBuilder.factory_('expr::kV("sqrt(1-@0*@0)",cosbma)')
+        self.modelBuilder.factory_('expr::tana("(@0*@1-@2)/(@1-@0*@2)", tanbeta, cosbma, kV)')
+        self.modelBuilder.factory_('expr::cosa("1/sqrt(1+@0*@0)",tana)')
+        self.modelBuilder.factory_('expr::sinb("tanbeta/sqrt(1+@0*@0)",tanbeta)')
+        self.modelBuilder.factory_('expr::ku("@0/@1", cosa, sinb)')
+        if int(self.thdmtype[0]) == 1: 
+            self.modelBuilder.factory_('expr::kd("@0", ku)')
+            self.modelBuilder.factory_('expr::kl("@0", ku)')
+        elif int(self.thdmtype[0]) == 2: 
+            self.modelBuilder.factory_('expr::cosb("1/sqrt(1+@0*@0)",tanbeta)')
+            self.modelBuilder.factory_('expr::sina("tana/sqrt(1+@0*@0)",tana)')
+            self.modelBuilder.factory_('expr::kd("-@0/@1", sina,cosb)')
+            self.modelBuilder.factory_('expr::kl("@0", kd)')
+        elif int(self.thdmtype[0]) == 3: 
+            self.modelBuilder.factory_('expr::cosb("1/sqrt(1+@0*@0)",tanbeta)')
+            self.modelBuilder.factory_('expr::sina("tana/sqrt(1+@0*@0)",tana)')
+            self.modelBuilder.factory_('expr::kd("@0", ku)')
+            self.modelBuilder.factory_('expr::kl("-@0/@1", sina,cosb)')
+        elif int(self.thdmtype[0]) == 4: 
+            self.modelBuilder.factory_('expr::cosb("1/sqrt(1+@0*@0)",tanbeta)')
+            self.modelBuilder.factory_('expr::sina("tana/sqrt(1+@0*@0)",tana)')
+            self.modelBuilder.factory_('expr::kd("-@0/@1", sina,cosb)')
+            self.modelBuilder.factory_('expr::kl("@0", ku)')
+            self.decayScaling = {
             'hgg':'hgg',
             'hzg':'hzg',
             'hww':'hvv',

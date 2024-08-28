@@ -5,6 +5,7 @@
 #include "RooAbsPdf.h"
 #include "RooConstVar.h"
 #include "RooRealProxy.h"
+#include "RooListProxy.h"
 //---------------------------------------------------------------------------
 class RooRealVar;
 class RooAbsReal;

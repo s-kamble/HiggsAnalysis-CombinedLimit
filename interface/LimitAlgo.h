@@ -8,6 +8,9 @@
  *
  *
  */
+
+#include <boost/bind/bind.hpp>
+#include <boost/bind/placeholders.hpp>
 #include <boost/program_options.hpp>
 #include <string>
 class RooWorkspace;

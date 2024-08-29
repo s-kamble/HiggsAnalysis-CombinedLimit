@@ -115,10 +115,16 @@ def parseCard(file, options):
             if f[0] == "kmax":
                 nuisances = int(f[1]) if f[1] != "*" else -1
             if f[0] == "shapes":
-                if not options.bin: raise RuntimeError("Can use shapes only with binary output mode")
-                if len(f) < 4: raise RuntimeError("Malformed shapes line")
-                if not ret.shapeMap.has_key(f[2]): ret.shapeMap[f[2]] = {}
-                if ret.shapeMap[f[2]].has_key(f[1]): raise RuntimeError("Duplicate definition for process '%s', channel '%s'" % (f[1], f[2]))
+                if not options.bin:
+                    raise RuntimeError("Can use shapes only with binary output mode")
+                if len(f) < 4:
+                    raise RuntimeError("Malformed shapes line")
+                # if not ret.shapeMap.has_key(f[2]):
+                if f[2] not in ret.shapeMap:   #has_key removed in python3, replaced with 'in' opearator
+                    ret.shapeMap[f[2]] = {}
+                # if ret.shapeMap[f[2]].has_key(f[1]):
+                if f[1] in ret.shapeMap[f[2]]:   #has_key removed in python3, replaced with 'in' opearator
+                    raise RuntimeError("Duplicate definition for process '%s', channel '%s'" % (f[1], f[2]))
                 ret.shapeMap[f[2]][f[1]] = f[3:]
                 if "$CHANNEL" in l: shapesUseBin = True
                 if f[2] != "*":     shapesUseBin = True
@@ -217,7 +223,7 @@ def parseCard(file, options):
                 continue
             elif pdf == "extArg":
                 # look for additional parameters in workspaces
-                # ret.extArgs[lsyst]=f[:]
+                ret.extArgs[lsyst]=f[:]
                 continue
             elif pdf == "rateParam":
                 if ("*" in f[3]) or ("*" in f[2]): # all channels/processes

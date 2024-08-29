@@ -111,7 +111,7 @@ class ShapeBuilder(ModelBuilder):
                         arg = bbb_args.at(bidx)
                         n = arg.GetName()
                         parname = n
-                        self.out._import(arg)
+                        self.out.safe_import(arg)
                         if arg.getAttribute("createGaussianConstraint"):
                             self.doObj("%s_Pdf" % n, "SimpleGaussianConstraint", "%s, %s_In[0,%s], %s" % (n, n, '-7,7', '1.0'), True)
                             self.out.var(n).setVal(0)
@@ -229,15 +229,15 @@ class ShapeBuilder(ModelBuilder):
                     simPdf.addExtraConstraints(self.out.nuisPdfs)
                 if self.options.verbose:
                     stderr.write("Importing combined pdf %s\n" % simPdf.GetName()); stderr.flush()
-                self.out._import(simPdf, ROOT.RooFit.RecycleConflictNodes())
+                self.out.safe_import(simPdf, ROOT.RooFit.RecycleConflictNodes())
                 if self.options.noBOnly: break
         else:
-            self.out._import(self.getObj("pdf_bin%s"       % self.DC.bins[0]).clone("model_s"), ROOT.RooFit.Silence())
+            self.out.safe_import(self.getObj("pdf_bin%s"       % self.DC.bins[0]).clone("model_s"), ROOT.RooFit.Silence())
             if not self.options.noBOnly: 
-                self.out._import(self.getObj("pdf_bin%s_bonly" % self.DC.bins[0]).clone("model_b"), ROOT.RooFit.Silence())
+                self.out.safe_import(self.getObj("pdf_bin%s_bonly" % self.DC.bins[0]).clone("model_b"), ROOT.RooFit.Silence())
         for arg in self.extraImports:
             #print 'Importing extra arg: %s' % arg.GetName()
-            self.out._import(arg, ROOT.RooFit.RecycleConflictNodes())
+            self.out.safe_import(arg, ROOT.RooFit.RecycleConflictNodes())
         if self.options.fixpars:
             pars = self.out.pdf("model_s").getParameters(self.out.obs)
             iter = pars.createIterator()
@@ -369,7 +369,7 @@ class ShapeBuilder(ModelBuilder):
                      self.out.binVars.add(obs, True)
             else:
                 self.out.binVars = self.shapeObs.values()[0]
-            self.out._import(self.out.binVars)
+            self.out.safe_import(self.out.binVars)
         else:
             self.out.mode = "binned"
             if self.options.verbose > 1: stderr.write("Will make a binned dataset\n")
@@ -377,12 +377,12 @@ class ShapeBuilder(ModelBuilder):
             if len(shapeObs.keys()) != 1:
                 raise RuntimeError("There's more than once choice of observables: %s\n" % str(shapeObs.keys()))
             self.out.binVars = shapeObs.values()[0]
-            self.out._import(self.out.binVars)
+            self.out.safe_import(self.out.binVars)
 
     def doCombinedDataset(self):
         if len(self.DC.bins) == 1 and self.options.forceNonSimPdf:
             data = self.getData(self.DC.bins[0],self.options.dataname).Clone(self.options.dataname)
-            self.out._import(data)
+            self.out.safe_import(data)
             return
 
         """ Combine is able to handle the binned/vs unbinned properly so no need for separate commands
@@ -394,19 +394,19 @@ class ShapeBuilder(ModelBuilder):
             for b in self.DC.bins: 
 	    	combiner.addSetBin(b, self.getData(b,self.options.dataname))
             self.out.data_obs = combiner.done(self.options.dataname,self.options.dataname)
-            self.out._import(self.out.data_obs)
+            self.out.safe_import(self.out.data_obs)
         elif self.out.mode == "unbinned":
             combiner = ROOT.CombDataSetFactory(self.out.obs, self.out.binCat)
             for b in self.DC.bins: combiner.addSetAny(b, self.getData(b,self.options.dataname))
             self.out.data_obs = combiner.doneUnbinned(self.options.dataname,self.options.dataname)
-            self.out._import(self.out.data_obs)
+            self.out.safe_import(self.out.data_obs)
         else: raise RuntimeException, "Only combined datasets are supported"
 	"""
         combiner = ROOT.CombDataSetFactory(self.out.obs, self.out.binCat)
         for b in self.DC.bins: 
             combiner.addSetAny(b, self.getData(b,self.options.dataname))
         self.out.data_obs = combiner.doneUnbinned(self.options.dataname,self.options.dataname)
-        self.out._import(self.out.data_obs)
+        self.out.safe_import(self.out.data_obs)
         if self.options.verbose>2:
             print("Created combined dataset with ",self.out.data_obs.numEntries()," entries, out of:")
             for b in self.DC.bins: print("  bin", b, ": entries = ", self.getData(b,self.options.dataname).numEntries())
@@ -483,7 +483,7 @@ class ShapeBuilder(ModelBuilder):
                         norm.setAttribute("flatParam")
                     norm.SetName("shape%s_%s_%s%s_norm" % (postFix,process,channel, "_"))
                     self.norm_rename_map[normname]=norm.GetName()
-                    self.out._import(norm, ROOT.RooFit.RecycleConflictNodes()) 
+                    self.out.safe_import(norm, ROOT.RooFit.RecycleConflictNodes()) 
                 if self.options.verbose > 2:
                     print("import (%s,%s) -> %s\n" % (finalNames[0], objname, ret.GetName()))
                 return ret

@@ -415,19 +415,32 @@ class ShapeBuilder(ModelBuilder):
     ## -------- Low level helpers ----------
     ## -------------------------------------
     def getShape(self,channel,process,syst="",_fileCache={},_cache={},allowNoSyst=False):
-        if _cache.has_key((channel,process,syst)): 
+        # if _cache.has_key((channel,process,syst)):
+        if (channel, process, syst) in _cache: 
             if self.options.verbose > 2: print("recyling (%s,%s,%s) -> %s\n" % (channel,process,syst,_cache[(channel,process,syst)].GetName()))
             return _cache[(channel,process,syst)];
         postFix="Sig" if (process in self.DC.isSignal and self.DC.isSignal[process]) else "Bkg"
         bentry = None
-        if self.DC.shapeMap.has_key(channel): bentry = self.DC.shapeMap[channel]
-        elif self.DC.shapeMap.has_key("*"):   bentry = self.DC.shapeMap["*"]
+        # if self.DC.shapeMap.has_key(channel):
+        if channel in self.DC.shapeMap:
+            bentry = self.DC.shapeMap[channel]
+        # elif self.DC.shapeMap.has_key("*"):
+        elif "*" in self.DC.shapeMap:
+            bentry = self.DC.shapeMap["*"]
         else: raise KeyError("Shape map has no entry for channel '%s'" % (channel))
         names = []
-        if bentry.has_key(process): names = bentry[process]
-        elif bentry.has_key("*"):   names = bentry["*"]
-        elif self.DC.shapeMap["*"].has_key(process): names = self.DC.shapeMap["*"][process]
-        elif self.DC.shapeMap["*"].has_key("*"):     names = self.DC.shapeMap["*"]["*"]
+        # if bentry.has_key(process):
+        if process in bentry:
+            names = bentry[process]
+        # elif bentry.has_key("*"):
+        elif "*" in bentry:
+            names = bentry["*"]
+        # elif self.DC.shapeMap["*"].has_key(process):
+        elif process in self.DC.shapeMap["*"]:
+            names = self.DC.shapeMap["*"][process]
+        # elif self.DC.shapeMap["*"].has_key("*"):
+        elif "*" in self.DC.shapeMap["*"]:
+            names = self.DC.shapeMap["*"]["*"]
         else: raise KeyError("Shape map has no entry for process '%s', channel '%s'" % (process,channel))
         if len(names) == 1 and names[0] == "FAKE": return None
         if syst != "": 
@@ -447,7 +460,8 @@ class ShapeBuilder(ModelBuilder):
             protected_kwords =  ["PROCESS","CHANNEL","SYSTEMATIC","MASS"]
             if mpname in protected_kwords: raise RuntimeError("Cannot use the following keywords (already assigned in combine): $"+" $".join(protected_kwords) )
             finalNames = [ fn.replace("$%s"%mpname,mpv) for fn in finalNames ]
-        if not _fileCache.has_key(finalNames[0]): 
+        # if not _fileCache.has_key(finalNames[0]): 
+        if finalNames[0] not in _fileCache:
             trueFName = finalNames[0]
             if not os.path.exists(trueFName) and not os.path.isabs(trueFName) and os.path.exists(self.options.baseDir+"/"+trueFName):
                 trueFName = self.options.baseDir+"/"+trueFName;
@@ -530,7 +544,9 @@ class ShapeBuilder(ModelBuilder):
     
     def getPdf(self,channel,process,_cache={}):
         postFix="Sig" if (process in self.DC.isSignal and self.DC.isSignal[process]) else "Bkg"
-        if _cache.has_key((channel,process)): return _cache[(channel,process)]
+        # if _cache.has_key((channel,process)):
+        if (channel, process) in _cache:
+            return _cache[(channel,process)]
         shapeNominal = self.getShape(channel,process)
         nominalPdf = self.shape2Pdf(shapeNominal,channel,process) if (self.options.useHistPdf == "always" or shapeNominal == None) else shapeNominal
         if shapeNominal == None: return nominalPdf # no point morphing a fake shape
